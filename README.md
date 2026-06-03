@@ -90,12 +90,12 @@ uv run train --help
 ```
 
 Checkpoints for Clari-M and Clari-L are uploaded to [HuggingFace](https://huggingface.co/the-matter-lab/clari).
-To run inference, see the [README.md](https://github.com/aspuru-guzik-group/clari/blob/main/clari/inference/README.md) in `clari.inference`.
-We also include a [SKILL.md](https://github.com/aspuru-guzik-group/clari/blob/main/clari/inference/SKILL.md) so that coding agents can run inference; installed environments can print it with `skill` (`uv run skill`).
+To run inference, see the [README.md](clari/inference/README.md) in `clari.inference`.
+We also include a [SKILL.md](clari/inference/SKILL.md) so that coding agents can run inference; installed environments can print it with `skill` (`uv run skill`).
 
 ## Evaluation
 
-Training and evaluation paths default to `data/`, `results/`, and `logs/` under the current working directory. Override them with `CLARI_DATA_DIR`, `CLARI_RESULTS_DIR`, and `CLARI_LOG_DIR`; see [`clari/paths.py`](https://github.com/aspuru-guzik-group/clari/blob/main/clari/paths.py).
+Training and evaluation paths default to `data/`, `results/`, and `logs/` under the current working directory. Override them with `CLARI_DATA_DIR`, `CLARI_RESULTS_DIR`, and `CLARI_LOG_DIR`; see [`clari/paths.py`](clari/paths.py).
 
 ### OXtal and Teaching Test Sets
 
