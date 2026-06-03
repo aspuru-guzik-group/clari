@@ -10,7 +10,7 @@ authors = [
     {name = "Luka Mucko", email = "luka.mucko@gmail.com"}, 
     {name = "Austin Cheng", email = "austin.cheng@mail.utoronto.ca"}
 ]
-readme = "README.md"
+readme = "clari/inference/README.md"
 dependencies = [
     "average-minimum-distance>=1.6.1",
     "ase>=3.28.0",

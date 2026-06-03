@@ -19,10 +19,7 @@ DEFAULT_MAX_RESAMPLE_FACTOR = 10
 HubModel = Literal["Clari-M", "Clari-L", "clari-m", "clari-l"]
 SmilesInput = str | tuple[str, int] | list[tuple[str, int]] | tuple[tuple[str, int], ...]
 RDMolInput = (
-    Chem.Mol
-    | tuple[Chem.Mol, int]
-    | list[tuple[Chem.Mol, int]]
-    | tuple[tuple[Chem.Mol, int], ...]
+    Chem.Mol | tuple[Chem.Mol, int] | list[tuple[Chem.Mol, int]] | tuple[tuple[Chem.Mol, int], ...]
 )
 _HUB_MODELS: dict[str, tuple[str, str]] = {
     "clari-m": ("the-matter-lab/clari", "clari-med.ckpt"),
@@ -160,17 +157,13 @@ def _is_rdmol_pair(value) -> bool:
 
 def _is_smiles_pair_sequence(value) -> bool:
     return (
-        isinstance(value, (list, tuple))
-        and bool(value)
-        and all(_is_smiles_pair(v) for v in value)
+        isinstance(value, (list, tuple)) and bool(value) and all(_is_smiles_pair(v) for v in value)
     )
 
 
 def _is_rdmol_pair_sequence(value) -> bool:
     return (
-        isinstance(value, (list, tuple))
-        and bool(value)
-        and all(_is_rdmol_pair(v) for v in value)
+        isinstance(value, (list, tuple)) and bool(value) and all(_is_rdmol_pair(v) for v in value)
     )
 
 

@@ -1,8 +1,14 @@
-# CLARI — Crystal Structure Generation
+# CLARI: Fast Organic Crystal Structure Prediction with Unit Cell Flow Matching
 
 CLARI takes a molecule and predicts how it packs into a crystal. A single run produces many candidate structures.
 
-Checkpoints are on Hugging Face at `the-matter-lab/clari-data` (`clari-large.ckpt`, `clari-med.ckpt`).
+## Links
+
+- [Source code](https://github.com/aspuru-guzik-group/clari)
+- [Paper: Fast Organic Crystal Structure Prediction with Unit Cell Flow Matching](https://arxiv.org/abs/2606.03199)
+- [Checkpoints and data](https://huggingface.co/the-matter-lab/clari)
+
+Checkpoints are available on Hugging Face as `clari-large.ckpt` and `clari-med.ckpt`.
 
 Inputs are expected to use explicit-hydrogen SMILES. For example, prefer
 `C([H])([H])([H])C([H])([H])[H]` over `CC`.
@@ -12,6 +18,7 @@ Inputs are expected to use explicit-hydrogen SMILES. For example, prefer
 ## Basic sampling
 
 **CLI**
+
 ```bash
 uv run sample \
   --checkpoint_path clari.ckpt \
@@ -22,6 +29,7 @@ uv run sample \
 ```
 
 **Python**
+
 ```python
 from clari.inference import ClariSampler, SampleRequest
 
@@ -39,6 +47,7 @@ samples = sampler.sample(
 Load from the Hub instead of a local file (downloads once, then cached):
 
 **CLI**
+
 ```bash
 uv run sample \
   --from_hub Clari-M \
@@ -49,6 +58,7 @@ uv run sample \
 ```
 
 **Python**
+
 ```python
 sampler = ClariSampler.from_hub("Clari-M")  # or "Clari-L"
 ```
@@ -58,6 +68,7 @@ sampler = ClariSampler.from_hub("Clari-M")  # or "Clari-L"
 ## Multiple molecules
 
 **CLI**
+
 ```bash
 uv run sample \
   --checkpoint_path clari.ckpt \
@@ -69,6 +80,7 @@ uv run sample \
 ```
 
 **Python**
+
 ```python
 from clari.inference import ClariSampler, SampleRequest
 
@@ -116,13 +128,13 @@ uv run sample --config jobs.json
 {
   "checkpoint_path": "clari.ckpt",
   "output_dir": "out/",
-  "smiles":     [
+  "smiles": [
     "C([H])([H])([H])C([H])([H])O[H]",
     "C1([H])=C([H])C([H])=C([H])C([H])=C1[H]"
   ],
-  "ids":        ["ethanol", "benzene"],
-  "copies":     [4, 4],
-  "n_samples":  [50, 50]
+  "ids": ["ethanol", "benzene"],
+  "copies": [4, 4],
+  "n_samples": [50, 50]
 }
 ```
 
@@ -146,6 +158,7 @@ Co-crystal configs use the same pair shape:
 ## Sample → rank → export top-K
 
 **CLI**
+
 ```bash
 uv run sample \
   --checkpoint_path clari.ckpt \
@@ -161,9 +174,15 @@ uv run export-cifs out/ --top_k 10
 ```
 
 **Python**
+
 ```python
 sampler = ClariSampler.from_checkpoint("clari.ckpt")
-sampler.sample("C([H])([H])([H])C([H])([H])[H]", copies=4, n_samples=64, output_dir="out/")
+sampler.sample(
+    "C([H])([H])([H])C([H])([H])[H]",
+    copies=4,
+    n_samples=64,
+    output_dir="out/",
+)
 # rank and export are CLI steps
 ```
 
@@ -180,6 +199,7 @@ uv run export-cifs out/ --sample_idx 0 --sample_idx 7
 ## Multi-GPU
 
 **CLI**
+
 ```bash
 uv run sample \
   --checkpoint_path clari.ckpt \
@@ -192,9 +212,15 @@ uv run sample \
 ```
 
 **Python**
+
 ```python
 sampler = ClariSampler.from_checkpoint("clari.ckpt", num_gpus=4)
-sampler.sample("C([H])([H])([H])C([H])([H])[H]", copies=4, n_samples=1000, output_dir="out/")
+sampler.sample(
+    "C([H])([H])([H])C([H])([H])[H]",
+    copies=4,
+    n_samples=1000,
+    output_dir="out/",
+)
 ```
 
 ---
@@ -202,6 +228,7 @@ sampler.sample("C([H])([H])([H])C([H])([H])[H]", copies=4, n_samples=1000, outpu
 ## Fixed batch size
 
 **CLI**
+
 ```bash
 uv run sample \
   --checkpoint_path clari.ckpt \
@@ -215,9 +242,16 @@ uv run sample \
 ```
 
 **Python**
+
 ```python
 sampler = ClariSampler.from_checkpoint("clari.ckpt", compile=False)
-sampler.sample("C([H])([H])([H])C([H])([H])[H]", copies=4, n_samples=32, batch_size=8, output_dir="out/")
+sampler.sample(
+    "C([H])([H])([H])C([H])([H])[H]",
+    copies=4,
+    n_samples=32,
+    batch_size=8,
+    output_dir="out/",
+)
 ```
 
 ---
@@ -225,6 +259,7 @@ sampler.sample("C([H])([H])([H])C([H])([H])[H]", copies=4, n_samples=32, batch_s
 ## CPU smoke test
 
 **CLI**
+
 ```bash
 uv run sample \
   --checkpoint_path clari.ckpt \
@@ -240,11 +275,37 @@ uv run sample \
 ```
 
 **Python**
+
 ```python
-sampler = ClariSampler.from_checkpoint("clari.ckpt", device="cpu", n_steps=2, compile=False, use_bf16=False)
-sampler.sample("C([H])([H])([H])C([H])([H])[H]", n_samples=1, batch_size=1, output_dir="out/")
+sampler = ClariSampler.from_checkpoint(
+    "clari.ckpt",
+    device="cpu",
+    n_steps=2,
+    compile=False,
+    use_bf16=False,
+)
+sampler.sample(
+    "C([H])([H])([H])C([H])([H])[H]",
+    n_samples=1,
+    batch_size=1,
+    output_dir="out/",
+)
 ```
 
 ---
 
 For all options: `uv run sample --help`
+
+## Citation
+
+```bibtex
+@misc{lo2026fastorganiccrystalstructure,
+      title={Fast Organic Crystal Structure Prediction with Unit Cell Flow Matching},
+      author={Alston Lo and Luka Mucko and Austin H. Cheng and Andy Cai and Alastair J. A. Price and Wojciech Matusik and Alán Aspuru-Guzik},
+      year={2026},
+      eprint={2606.03199},
+      archivePrefix={arXiv},
+      primaryClass={cs.LG},
+      url={https://arxiv.org/abs/2606.03199},
+}
+```
