@@ -131,3 +131,17 @@ The exact commands used for to train our ablated and final models can be found i
 ```
 from clari.pipelines.utils.metrics import assess_crystals_eval
 ```
+
+## Citation
+
+```bibtex
+@misc{lo2026fastorganiccrystalstructure,
+      title={Fast Organic Crystal Structure Prediction with Unit Cell Flow Matching},
+      author={Alston Lo and Luka Mucko and Austin H. Cheng and Andy Cai and Alastair J. A. Price and Wojciech Matusik and Alán Aspuru-Guzik},
+      year={2026},
+      eprint={2606.03199},
+      archivePrefix={arXiv},
+      primaryClass={cs.LG},
+      url={https://arxiv.org/abs/2606.03199},
+}
+```
