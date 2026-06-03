@@ -47,6 +47,7 @@ def _make_clash_check():
 
 @dataclasses.dataclass
 class SampleRequest:
+
     id: str
     crystal: Crystal | None = None
     smiles: SmilesInput | None = None
@@ -204,6 +205,7 @@ def _broadcast(value: int | list[int], n: int, name: str) -> list[int]:
 
 @dataclasses.dataclass
 class CrystalSample:
+
     id: str
     sample_idx: int
     crystal: Crystal
@@ -231,6 +233,7 @@ class CrystalSample:
 
 @dataclasses.dataclass(frozen=True)
 class SampleChunk:
+
     request_idx: int
     id: str
     sample_idx_start: int
@@ -386,6 +389,7 @@ def pbar_desc(pbar: bool | str) -> str | None:
 
 
 class ClariSampler:
+
     def __init__(
         self,
         lit: LitDiT,

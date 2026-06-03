@@ -29,6 +29,7 @@ gemmi.set_leak_warnings(False)
 
 @dataclasses.dataclass(frozen=True)
 class Crystal:
+
     x: Tensor  # (* 3+N 3) (0.5*abc coords)
 
     # Sequence

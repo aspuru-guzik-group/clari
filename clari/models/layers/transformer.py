@@ -9,6 +9,7 @@ Norm = partial(nn.LayerNorm, eps=1e-5)
 
 
 class Modulate(nn.Module):
+
     def __init__(self, dim, dim_cond, bias=True):
         super().__init__()
 
@@ -35,6 +36,7 @@ class Modulate(nn.Module):
 
 
 class Conditioned(nn.Module):
+
     def __init__(self, module, dim, dim_cond):
         super().__init__()
 
@@ -50,6 +52,7 @@ class Conditioned(nn.Module):
 
 
 class Transition(nn.Module):
+
     def __init__(self, dim, dim_out=None, expand=2):
         super().__init__()
 
@@ -66,6 +69,7 @@ class Transition(nn.Module):
 
 
 class TransitionStack(nn.Module):
+
     def __init__(self, dim, expand, depth):
         super().__init__()
 
@@ -80,6 +84,7 @@ class TransitionStack(nn.Module):
 
 
 class Attention(nn.Module):
+
     def __init__(self, dim, dim_pair, num_heads):
         assert dim % num_heads == 0
         super().__init__()
@@ -110,6 +115,7 @@ class Attention(nn.Module):
 
 
 class Transformer(nn.Module):
+
     def __init__(self, dim, dim_pair, dim_cond, num_heads, expand, depth):
         super().__init__()
 

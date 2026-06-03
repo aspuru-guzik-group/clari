@@ -13,12 +13,14 @@ from clari.paths import LOG_DIR, random_checkpoint_dir
 
 
 class GradNormMonitor(L.Callback):
+
     def on_after_backward(self, trainer, pl_module):
         grad_2norm = grad_norm(pl_module, norm_type=2.0)["grad_2.0_norm_total"]
         pl_module.log("gradients/norm_before_clip", grad_2norm)
 
 
 class WandbArtifactCallback(L.Callback):
+
     def __init__(self):
         super().__init__()
 
@@ -46,6 +48,7 @@ class WandbArtifactCallback(L.Callback):
 
 
 class SimpleTrainer(L.Trainer):
+
     def __init__(
         self,
         accelerator: Literal["cpu", "gpu"] = "gpu",
