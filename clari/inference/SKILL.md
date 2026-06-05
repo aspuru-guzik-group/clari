@@ -113,7 +113,7 @@ Top-level config keys (all optional, override CLI defaults):
 - `use_ema`, `use_bf16`, `pbar` — booleans
 - `add_hs` — global H-addition default for all requests in this config
 
-Per-request keys: `id`, `smiles`, `copies`, `samples`, `add_hs`.
+Per-request keys: `id`, `smiles`, `copies`, `samples`, `add_hs`, `batch_size`.
 
 ### All CLI flags
 

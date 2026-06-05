@@ -30,6 +30,7 @@ class SampleRequest:
     copies: int = 4
     samples: int = 1
     add_hs: bool | list[bool] = True
+    batch_size: int | None = None
 
     def __post_init__(self) -> None:
         if self.id is None:
@@ -184,29 +185,30 @@ def parse_config_requests(
         if not isinstance(item, dict):
             raise ValueError(f"Each request must be an object, got {type(item)!r}")
         smiles = item.get("smiles")
+        batch_size = int(item["batch_size"]) if item.get("batch_size") is not None else None
         if isinstance(smiles, str):
-            requests.append(
-                build_request(
-                    smiles,
-                    id=item.get("id"),
-                    copies=int(item.get("copies", 4)),
-                    samples=int(item.get("samples", 1)),
-                    add_hs=bool(item.get("add_hs", add_hs_default)),
-                )
+            req = build_request(
+                smiles,
+                id=item.get("id"),
+                copies=int(item.get("copies", 4)),
+                samples=int(item.get("samples", 1)),
+                add_hs=bool(item.get("add_hs", add_hs_default)),
             )
+            req.batch_size = batch_size
+            requests.append(req)
         elif (
             isinstance(smiles, list)
             and smiles
             and all(isinstance(pair, (list, tuple)) and len(pair) == 2 for pair in smiles)
         ):
-            requests.append(
-                build_request(
-                    [(str(part), int(part_copies)) for part, part_copies in smiles],
-                    id=item.get("id"),
-                    samples=int(item.get("samples", 1)),
-                    add_hs=bool(item.get("add_hs", add_hs_default)),
-                )
+            req = build_request(
+                [(str(part), int(part_copies)) for part, part_copies in smiles],
+                id=item.get("id"),
+                samples=int(item.get("samples", 1)),
+                add_hs=bool(item.get("add_hs", add_hs_default)),
             )
+            req.batch_size = batch_size
+            requests.append(req)
         else:
             raise ValueError(
                 "Each request `smiles` value must be a string or a list of `[smiles, copies]` pairs."

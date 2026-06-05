@@ -319,7 +319,7 @@ class ClariSampler:
             try:
                 for request in requests:
                     samples.extend(
-                        self.sample_request(request, batch_size=batch_size, progress=progress)
+                        self.sample_request(request, batch_size=request.batch_size or batch_size, progress=progress)
                     )
             finally:
                 if progress is not None:
@@ -345,7 +345,7 @@ def build_chunks(
     sample_idx = 0
     for request_index, request in enumerate(requests):
         crystal = request_to_crystal(request)
-        chunk_size = auto_batch_size(int(crystal.num_atoms), batch_size, device)
+        chunk_size = auto_batch_size(int(crystal.num_atoms), request.batch_size or batch_size, device)
         for local_start in range(0, request.samples, chunk_size):
             count = min(chunk_size, request.samples - local_start)
             chunks.append(
