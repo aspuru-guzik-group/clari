@@ -140,7 +140,7 @@ Per-request keys: `id`, `smiles`, `copies`, `samples`, `add_hs`, `batch_size`.
 
 ## CLI — ranking
 
-Requires `fairchem-core`. Install with `pip install "clari-csp[uma]"` or `uv sync --extra uma`.
+Requires `fairchem-core`. Install with `pip install clari[uma]"` or `uv sync --extra uma`.
 
 ```bash
 uv run rank results/ethanol
