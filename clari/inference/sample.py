@@ -271,10 +271,11 @@ class ClariSampler:
         produced: list[Crystal] = []
         while len(produced) < target_samples:
             need = min(per_batch, target_samples - len(produced))
-            samples = self.sample_batch(crystal, need)
-            produced.extend(samples[:need])
+            got = self.sample_batch(crystal, need)
+            produced.extend(got[:need])
+            per_batch = min(per_batch, len(got))
             if progress is not None:
-                progress.update(min(len(samples), need))
+                progress.update(min(len(got), need))
         return produced[:target_samples]
 
     @torch.inference_mode()
@@ -424,19 +425,27 @@ def gpu_worker(
     n_steps: int | None,
     compile: bool | None,
     torch_threads: int,
+    error_queue: mp.queues.Queue,
 ) -> None:
-    torch.cuda.set_device(rank)
-    sampler = ClariSampler.from_checkpoint(
-        checkpoint_path,
-        device=f"cuda:{rank}",
-        use_ema=use_ema,
-        use_bf16=use_bf16,
-        n_steps=n_steps,
-        compile=compile,
-        torch_threads=torch_threads,
-        num_gpus=1,
-    )
-    run_chunks(sampler, requests, chunks, Path(shards_dir), pbar=False)
+    import sys
+    import traceback
+
+    try:
+        torch.cuda.set_device(rank)
+        sampler = ClariSampler.from_checkpoint(
+            checkpoint_path,
+            device=f"cuda:{rank}",
+            use_ema=use_ema,
+            use_bf16=use_bf16,
+            n_steps=n_steps,
+            compile=compile,
+            torch_threads=torch_threads,
+            num_gpus=1,
+        )
+        run_chunks(sampler, requests, chunks, Path(shards_dir), pbar=False)
+    except Exception:
+        error_queue.put((rank, traceback.format_exc()))
+        sys.exit(1)
 
 
 def sample_to_directory(
@@ -484,6 +493,7 @@ def sample_to_directory(
         if torch.cuda.device_count() < num_gpus:
             raise RuntimeError(f"Requested {num_gpus} GPUs, found {torch.cuda.device_count()}")
         ctx = mp.get_context("spawn")
+        error_queue = ctx.Queue()
         procs = []
         for rank in range(num_gpus):
             proc = ctx.Process(
@@ -499,14 +509,21 @@ def sample_to_directory(
                     sampler.n_steps,
                     sampler.compile,
                     sampler.torch_threads,
+                    error_queue,
                 ),
             )
             proc.start()
             procs.append(proc)
         for proc in procs:
             proc.join()
-            if proc.exitcode != 0:
-                raise RuntimeError(f"Sampling worker failed with exit code {proc.exitcode}")
+        errors = []
+        while not error_queue.empty():
+            errors.append(error_queue.get_nowait())
+        if errors:
+            msgs = "\n".join(f"GPU {r}:\n{tb}" for r, tb in sorted(errors))
+            raise RuntimeError(f"Sampling worker(s) failed:\n{msgs}")
+        elif any(proc.exitcode != 0 for proc in procs):
+            raise RuntimeError("A sampling worker failed (no traceback captured).")
     merge_shards(shards_dir, output_dir / "predictions.parquet")
     shutil.rmtree(shards_dir)
     return output_dir
