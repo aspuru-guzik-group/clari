@@ -265,9 +265,15 @@ def sample(
         with silenced_rdlogger():
             mols = []
             for s, c in smiles_input:
-                mol = Chem.MolFromSmiles(s, sanitize=False)
+                if isinstance(s, str) and (s.lower().endswith('.mol') or (len(s) < 1024 and Path(s).is_file())):
+                    mol = Chem.MolFromMolFile(s, sanitize=False)
+                elif isinstance(s, str) and ("M  END" in s or "V2000" in s or "V3000" in s):
+                    mol = Chem.MolFromMolBlock(s, sanitize=False)
+                else:
+                    mol = Chem.MolFromSmiles(s, sanitize=False)
+                
                 if mol is None:
-                    raise ValueError(f"Could not parse SMILES: {s!r}")
+                    raise ValueError(f"Could not parse input (SMILES, path, or mol block): {s!r}")
                 frags = Chem.GetMolFrags(mol, asMols=True)
                 if frags:
                     for frag in frags:

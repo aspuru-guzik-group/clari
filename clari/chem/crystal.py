@@ -439,10 +439,19 @@ class Crystal:
         csd_id: str = "smiles",
         add_hs: bool = False,
     ) -> Self:
+        from pathlib import Path
         with silenced_rdlogger():
-            mols = [(Chem.MolFromSmiles(s, sanitize=False), c) for s, c in smiles]
+            mols = []
+            for s, c in smiles:
+                if isinstance(s, str) and (s.lower().endswith('.mol') or (len(s) < 1024 and Path(s).is_file())):
+                    mol = Chem.MolFromMolFile(s, sanitize=False)
+                elif isinstance(s, str) and ("M  END" in s or "V2000" in s or "V3000" in s):
+                    mol = Chem.MolFromMolBlock(s, sanitize=False)
+                else:
+                    mol = Chem.MolFromSmiles(s, sanitize=False)
+                mols.append((mol, c))
         if any(m is None for m, _ in mols):
-            raise ValueError(f"Could not parse SMILES: {smiles!r}")
+            raise ValueError(f"Could not parse SMILES or read .mol file: {smiles!r}")
         if add_hs:
             for m, _ in mols:
                 m.UpdatePropertyCache(strict=False)
