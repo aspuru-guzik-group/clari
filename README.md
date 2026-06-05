@@ -19,19 +19,80 @@ This repository contains code to reproduce the paper: Fast Organic Crystal Struc
 
 ## Installation
 
-To install CLARI as a package:
+To install only the required packages for CLARI to run inference:
 
 ```bash
-uv pip install clari
+pip install .
 ```
 
-or:
+## Usage
+
+### 🚀 Quickstart (CLI)
+
+You can run crystal structure prediction directly from the command line using a SMILES string. CLARI will automatically download the pretrained model from Hugging Face Hub if it is not found locally:
 
 ```bash
-pip install clari
+# Generate 10 crystal structure samples for Ethanol (CCO)
+clari --smiles "CCO" --samples 10
 ```
 
-Install everything needed for training, sampling, ranking, and most of the evaluation pipeline:
+To see all available CLI options:
+
+```bash
+clari --help
+```
+
+### 🐍 Quickstart (Python API)
+
+You can also run crystal structure sampling directly inside Python:
+
+```python
+from clari.inference.simplified_cli import sample
+
+# Predict 10 crystal structures for a SMILES string
+samples = sample(
+    smiles="CCO",
+    n_samples=10,
+    checkpoint="clari-huge",  # Downloads automatically if not cached locally
+)
+
+# Export the first generated crystal structure to a CIF file
+first_sample = samples[0]
+print(first_sample.crystal.to_cif())
+```
+
+### Advanced Usage
+
+After installing CLARI in an activated environment, you can use the other command-line tools directly:
+
+```bash
+sample --help
+sample-test --help
+rank --help
+export-cifs --help
+summarize --help
+skill
+```
+
+When working from a source checkout with `uv sync`, prefix commands with `uv run`, for example:
+
+```bash
+uv run train --help
+```
+
+Checkpoints for Clari-M and Clari-L are uploaded to [HuggingFace](https://huggingface.co/the-matter-lab/clari).
+To run inference, see the [README.md](clari/inference/README.md) in `clari.inference`.
+We also include a [SKILL.md](clari/inference/SKILL.md) so that coding agents can run inference; installed environments can print it with `skill` (`uv run skill`).
+
+## Development Installation
+
+To install all dependencies needed for development (in editable mode):
+
+```bash
+pip install -e ".[dev]"
+```
+
+Or using `uv` to sync the full development environment:
 
 ```bash
 uv sync
@@ -69,29 +130,6 @@ uv run python -m scripts.data.1_process --num_workers=16
 ```
 
 For reference, the CSD refcodes we use and our dataset split are uploaded to [HuggingFace](https://huggingface.co/the-matter-lab/clari).
-
-## Usage
-
-After installing CLARI in an activated environment, use the command-line tools directly:
-
-```bash
-sample --help
-sample-test --help
-rank --help
-export-cifs --help
-summarize --help
-skill
-```
-
-When working from a source checkout with `uv sync`, prefix commands with `uv run`, for example:
-
-```
-uv run train --help
-```
-
-Checkpoints for Clari-M and Clari-L are uploaded to [HuggingFace](https://huggingface.co/the-matter-lab/clari).
-To run inference, see the [README.md](clari/inference/README.md) in `clari.inference`.
-We also include a [SKILL.md](clari/inference/SKILL.md) so that coding agents can run inference; installed environments can print it with `skill` (`uv run skill`).
 
 ## Evaluation
 
@@ -135,7 +173,7 @@ from clari.pipelines.utils.metrics import assess_crystals_eval
 ## Citation
 
 ```bibtex
-@misc{lo2026fastorganiccrystalstructure,
+@misc{lo2026clari,
       title={Fast Organic Crystal Structure Prediction with Unit Cell Flow Matching},
       author={Alston Lo and Luka Mucko and Austin H. Cheng and Andy Cai and Alastair J. A. Price and Wojciech Matusik and Alán Aspuru-Guzik},
       year={2026},

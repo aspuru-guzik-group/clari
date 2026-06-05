@@ -2,8 +2,13 @@ from __future__ import annotations
 
 import lightning as L
 import torch
-import wandb
-from lightning.pytorch.loggers import WandbLogger
+
+try:
+    import wandb
+    from lightning.pytorch.loggers import WandbLogger
+except ImportError:
+    wandb = None
+    WandbLogger = None
 
 from clari.models import DiT
 from clari.pipelines.base.interfaces import Interface
@@ -101,8 +106,9 @@ class LitDiT(L.LightningModule):
             C_pred.extend(samples.unbatch())
             C_true.extend(batch.unbatch())
 
-        using_wandb = isinstance(self.logger, WandbLogger)
+        using_wandb = WandbLogger is not None and isinstance(self.logger, WandbLogger)
         if (idx == 0) and global_rank_zero and using_wandb:
+            assert wandb is not None, "wandb must be installed when WandbLogger is active"
             nviz = hp.sample_n_visualize
             js = sample_views(C_pred[:nviz], C_true[:nviz])
             wandb.log({f"samples/{split}": wandb.Html(js), "epoch": self.current_epoch})

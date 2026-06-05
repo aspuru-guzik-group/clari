@@ -24,7 +24,7 @@ In priority order:
 1. **A molecule.** Accept an explicit-hydrogen SMILES string, a chemical name, an RDKit mol, or a co-crystal list of `(SMILES, copy_count)` pairs. If they give a name (ethanol, aspirin, paracetamol, urea), convert it to explicit-hydrogen SMILES yourself only for common molecules you are confident about. For unfamiliar or ambiguous names, confirm the SMILES with the user before running. **Never guess a SMILES.**
 2. **A checkpoint or Hub model.** Either pass a local checkpoint path with `--checkpoint_path` or a Hub model name with `--from_hub` (`Clari-M`, `Clari-L`). Hub checkpoints are available at `the-matter-lab/clari-data` as `clari-med.ckpt` and `clari-large.ckpt`, but Hub access requires internet or a warm local cache. Do not start sampling against a missing local checkpoint or an unavailable Hub cache.
 3. **`n_samples`** — how many structures to generate. Use whatever the user said. If they didn't say, default to 100.
-4. **`copies`** — molecules per asymmetric unit for single-component inputs. The CLI and Python defaults are 4. For agent-run CSP requests, default to **4** for small organics unless the user specified otherwise. Use 1 only when the molecule is very large (>100 heavy atoms) or the user explicitly asks. For co-crystals, hydrates, and solvates, encode the intended stoichiometry with per-component counts in the `(SMILES, copy_count)` pairs. The counts may differ between components. Ask if uncertain — wrong copy counts produce unphysical results.
+4. **`copies`** — copies of each molecule in the unit cell for single-component inputs. The CLI and Python defaults are 4. For agent-run CSP requests, default to **4** for small organics unless the user specified otherwise. Use 1 only when the molecule is very large (>100 heavy atoms) or the user explicitly asks. For co-crystals, hydrates, and solvates, encode the intended stoichiometry with per-component counts in the `(SMILES, copy_count)` pairs. The counts may differ between components. Ask if uncertain — wrong copy counts produce unphysical results.
 5. **Output directory.** Default to `out/<id>/` where `<id>` is the user-provided id or a sanitized molecule name.
 
 CLARI expects explicit-hydrogen SMILES. Prefer `C([H])([H])([H])C([H])([H])[H]` over `CC`.
@@ -135,7 +135,7 @@ uv run sample --config jobs.json
 
 CLI flags layered on top of `--config` override the file values. An example co-crystal config lives at `scripts/inference/sample_config.json`.
 
-## Multi-component asymmetric units
+## Multi-component unit cells
 
 Co-crystals, hydrates, and solvates use lists of `(SMILES, copy_count)` pairs. Prefer config files for CLI runs because repeated `--smiles` flags mean multiple independent requests, not one co-crystal.
 

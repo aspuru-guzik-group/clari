@@ -109,28 +109,7 @@ def draw_crystal_trajectory(
     def frame_xyz(C):
         atoms = C.atom_nums.numpy(force=True)
         coords = C.coords.numpy(force=True)
-        if not lattice:
-            return xyzfile(atoms, coords)
-        # Embed unit cell edges as He dummy atoms so they animate per-frame.
-        L = C.lattice.numpy(force=True)
-        o = -0.5 * L.sum(axis=0)
-        corners = np.array(
-            [[i, j, k] for i in range(2) for j in range(2) for k in range(2)], dtype=float
-        )
-        edges = [
-            (i, j)
-            for i in range(8)
-            for j in range(i + 1, 8)
-            if np.abs(corners[i] - corners[j]).sum() == 1
-        ]
-        t = np.linspace(0, 1, 15)
-        box_pts = np.array(
-            [o + (corners[i] + ti * (corners[j] - corners[i])) @ L for i, j in edges for ti in t]
-        )
-        return xyzfile(
-            np.concatenate([atoms, np.full(len(box_pts), 2)]),  # He = 2
-            np.concatenate([coords, box_pts]),
-        )
+        return xyzfile(atoms, coords)
 
     interval = duration_play * 1000 / len(traj)
     hold_last = round(duration_stop / (interval / 1000))
@@ -143,10 +122,24 @@ def draw_crystal_trajectory(
 
     view.addModelsAsFrames(trajfile, "xyz", viewer=viewer)
     view.setStyle(
-        {"not": {"elem": "He"}}, {"stick": {"radius": 0.2}, "sphere": {"scale": 0.2}}, viewer=viewer
+        {"stick": {"radius": 0.2}, "sphere": {"scale": 0.2}}, viewer=viewer
     )
     if lattice:
-        view.setStyle({"elem": "He"}, {"sphere": {"radius": 0.08, "color": "gray"}}, viewer=viewer)
+        # Re-use draw_arrow and draw_box with the `frame` keyword argument.
+        for i, C in enumerate(traj):
+            L = C.lattice.numpy(force=True)
+            o = -0.5 * L.sum(axis=0)
+            for p, c in zip(L + o, ["red", "green", "blue"], strict=False):
+                draw_arrow(view, o, p, viewer=viewer, radius=0.2, radiusRatio=2, mid=0.92, color=c, frame=i)
+            draw_box(view, L, viewer=viewer, radius=0.05, frame=i)
+
+        for j in range(hold_last):
+            L = traj[-1].lattice.numpy(force=True)
+            o = -0.5 * L.sum(axis=0)
+            frame_idx = len(traj) + j
+            for p, c in zip(L + o, ["red", "green", "blue"], strict=False):
+                draw_arrow(view, o, p, viewer=viewer, radius=0.2, radiusRatio=2, mid=0.92, color=c, frame=frame_idx)
+            draw_box(view, L, viewer=viewer, radius=0.05, frame=frame_idx)
     view.animate({"interval": interval})
     view.zoomTo()
     return view

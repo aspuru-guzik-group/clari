@@ -4,10 +4,15 @@ import tempfile
 from typing import Literal
 
 import lightning as L
-import wandb
 from lightning.pytorch.callbacks import EarlyStopping, LearningRateMonitor, ModelCheckpoint
-from lightning.pytorch.loggers import WandbLogger
 from lightning.pytorch.utilities import grad_norm
+
+try:
+    import wandb as wandb_module
+    from lightning.pytorch.loggers import WandbLogger
+except ImportError:
+    wandb_module = None
+    WandbLogger = None
 
 from clari.paths import LOG_DIR, random_checkpoint_dir
 
@@ -29,14 +34,16 @@ class WandbArtifactCallback(L.Callback):
         self.last_epoch = -1
 
     def on_save_checkpoint(self, trainer, pl_module, checkpoint):
-        run = wandb.run
+        if wandb_module is None:
+            raise ImportError("wandb is not installed, but WandbArtifactCallback was called.")
+        run = wandb_module.run
         if run is None:
             return
         assert trainer.current_epoch >= self.last_epoch
 
         artifact_name = f"model-{run.id}"
         if trainer.current_epoch > self.last_epoch:
-            artifact = wandb.Artifact(name=artifact_name, type="model")
+            artifact = wandb_module.Artifact(name=artifact_name, type="model")
             with tempfile.NamedTemporaryFile("w", suffix=".json") as f:
                 json.dump({"epoch": trainer.current_epoch}, f)
                 f.flush()
@@ -107,6 +114,8 @@ class SimpleTrainer(L.Trainer):
             )
 
         if wandb:
+            if wandb_module is None or WandbLogger is None:
+                raise ImportError("wandb is not installed, but wandb=True was requested.")
             logger = WandbLogger(
                 name=wandb_name,
                 project=wandb_project,

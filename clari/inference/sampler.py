@@ -16,7 +16,7 @@ from clari.pipelines.base.lit import LitDiT
 H100_REFERENCE_MEMORY_GB = 81.0
 DEFAULT_MAX_RESAMPLE_FACTOR = 10
 
-HubModel = Literal["Clari-M", "Clari-L", "clari-m", "clari-l"]
+HubModel = Literal["Clari-M", "Clari-L", "Clari-H", "clari-m", "clari-l", "clari-h"]
 SmilesInput = str | tuple[str, int] | list[tuple[str, int]] | tuple[tuple[str, int], ...]
 RDMolInput = (
     Chem.Mol | tuple[Chem.Mol, int] | list[tuple[Chem.Mol, int]] | tuple[tuple[Chem.Mol, int], ...]
@@ -24,21 +24,34 @@ RDMolInput = (
 _HUB_MODELS: dict[str, tuple[str, str]] = {
     "clari-m": ("the-matter-lab/clari", "clari-med.ckpt"),
     "clari-l": ("the-matter-lab/clari", "clari-large.ckpt"),
+    "clari-h": ("the-matter-lab/clari", "clari-huge.ckpt"),
 }
 
 
 def resolve_hub_checkpoint(model: HubModel) -> str:
     model_key = str(model).strip().lower()
+    if model_key in ("clari-huge", "clari-h"):
+        model_key = "clari-h"
+    elif model_key in ("clari-large", "clari-l"):
+        model_key = "clari-l"
+    elif model_key in ("clari-med", "clari-m"):
+        model_key = "clari-m"
+
     if model_key not in _HUB_MODELS:
         raise ValueError(f"Unknown model {model!r}. Available: {sorted(_HUB_MODELS)}")
     repo_id, filename = _HUB_MODELS[model_key]
+
+    from huggingface_hub import try_to_load_from_cache, _CACHED_NO_EXIST
+    cached_path = try_to_load_from_cache(repo_id=repo_id, filename=filename)
+    if cached_path is None or cached_path is _CACHED_NO_EXIST:
+        print(f"Resolving model '{model_key}' from HF Hub ({repo_id}/{filename})...")
+        print("Downloading model checkpoint...")
+
     return hf_hub_download(repo_id=repo_id, filename=filename)
 
 
 def _make_clash_check():
-    """Lazy import — pulls in pymatgen/amd only when filtering is requested."""
     from clari.pipelines.utils.metrics import check_clashes_eval
-
     return lambda crystal: bool(check_clashes_eval(crystal))
 
 
@@ -320,13 +333,22 @@ def split_chunk_trajectories(
         raise ValueError(f"Trajectory atom count {total_atoms} is not divisible by {n_kept}")
     per_sample_atoms = total_atoms // n_kept
     reshaped = traj_cpu.reshape(traj_cpu.shape[0], n_kept, per_sample_atoms, *rest)
+    if per_sample_atoms == 1:
+        return [reshaped[:, sample_idx, 0].clone() for sample_idx in range(n_kept)]
     return [reshaped[:, sample_idx].clone() for sample_idx in range(n_kept)]
 
 
 def resolve_device(device: str | torch.device | None) -> torch.device:
     if device is None or str(device) == "auto":
-        return torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    return torch.device(device)
+        if torch.cuda.is_available():
+            res = torch.device("cuda")
+        elif torch.backends.mps.is_available():
+            res = torch.device("mps")
+        else:
+            res = torch.device("cpu")
+    else:
+        res = torch.device(device)
+    return res
 
 
 def set_torch_threads(n: int) -> None:
