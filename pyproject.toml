@@ -29,7 +29,6 @@ dependencies = [
     "typing-extensions; python_version < '3.11'",
     "average-minimum-distance>=1.6.1",
     "pymatgen",
-    "py3dmol",
 ]
 
 [project.optional-dependencies]
@@ -50,6 +49,7 @@ dev = [
     "triton; sys_platform == 'linux'",
     "torchmetrics",
     "ruff>=0.15.5",
+    "py3dmol>=2.5.4",
 ]
 
 [project.urls]
