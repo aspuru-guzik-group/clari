@@ -17,7 +17,7 @@ def rank(
     num_gpus: int = 1,
     torch_threads: int = 1,
     overwrite: bool = False,
-) -> None:
+) -> pl.DataFrame:
     """Compute FairChem energies and write compact sample rankings.
 
     This intentionally does not duplicate CIFs from predictions.parquet. The output
@@ -52,6 +52,7 @@ def rank(
     )
     rankings.write_csv(rankings_path)
     print(f"Saved compact rankings to {rankings_path}")
+    return rankings
 
 
 def main() -> None:

@@ -554,6 +554,19 @@ def sample(
     )
 
 
+def save(crystals: list[Crystal], output_dir: str | Path, overwrite: bool = False) -> Path:
+    output_dir = Path(output_dir)
+    prepare_output_dir(output_dir, overwrite)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    rows = [
+        {"id": c.csd_id or "sample", "sample_idx": i, "cif": c.to_cif()}
+        for i, c in enumerate(crystals)
+    ]
+    parquet_path = output_dir / "predictions.parquet"
+    pl.DataFrame(rows).write_parquet(parquet_path)
+    return parquet_path
+
+
 # ---------------------------------------------------------------------------
 # Demo-only utility — not part of the production API.
 # Returns full diffusion trajectories for visualisation in notebooks.

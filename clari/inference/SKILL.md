@@ -220,8 +220,8 @@ sampler.sample(
 ```python
 from clari.inference import rank, export_cifs
 
-# Rank by UMA energy — requires a path; does not work on in-memory Crystal lists
-rank("results/ethanol")
+# Rank by UMA energy — returns DataFrame: sample_idx, id, energies, rank
+df = rank("results/ethanol")
 
 # Export from disk
 export_cifs("results/ethanol")

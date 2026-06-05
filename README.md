@@ -136,16 +136,18 @@ sampler.sample(
 ### Rank and export from Python
 
 ```python
-from clari.inference import rank, export_cifs
+from clari.inference import save, rank, export_cifs
 
-rank("results/ethanol")  # requires a path — does not work on in-memory Crystal lists
+crystals = sampler.sample("CCO", id="ethanol", samples=100)
+save(crystals, "results/ethanol")
+
+df = rank("results/ethanol")  # returns DataFrame: sample_idx, id, energies, rank
 
 export_cifs("results/ethanol")
 export_cifs("results/ethanol", top_k=3)
 export_cifs("results/ethanol", sample_idx=[0, 2])
 export_cifs("results/ethanol", output_dir="my_cifs/ethanol")
 
-# From an in-memory list
 export_cifs(crystals, output_dir="my_cifs/", id="ethanol")
 ```
 
