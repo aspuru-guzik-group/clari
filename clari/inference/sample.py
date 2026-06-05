@@ -608,6 +608,7 @@ def save(crystals: list[Crystal], output_dir: str | Path, overwrite: bool = Fals
     ]
     parquet_path = output_dir / "predictions.parquet"
     pl.DataFrame(rows).write_parquet(parquet_path)
+    (output_dir / "config.json").write_text("{}\n")
     return parquet_path
 
 
