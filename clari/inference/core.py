@@ -21,7 +21,7 @@ def build_parser() -> ArgumentParser:
     parser.add_argument("--smiles", action="append", default=None)
     parser.add_argument("--copies", action="append", default=None)
     parser.add_argument("--id", type=str, default=None)
-    parser.add_argument("--n_samples", type=int, default=1)
+    parser.add_argument("--samples", type=int, default=1)
     parser.add_argument("--checkpoint_path", type=str, default="clari-m")
     parser.add_argument("--output_dir", type=str, default=None)
     parser.add_argument("--batch_size", type=int, default=None)
@@ -58,7 +58,7 @@ def main(argv: list[str] | None = None) -> int:
                 args.pop("smiles"),
                 args.pop("copies"),
                 args.pop("id"),
-                args.pop("n_samples"),
+                args.pop("samples"),
                 no_add_hs_flags,
             )
         use_ema = False if args["no_ema"] else bool(config_options.get("use_ema", True))
@@ -75,7 +75,7 @@ def main(argv: list[str] | None = None) -> int:
                     id=request.id,
                     smiles=request.smiles,
                     copies=request.copies,
-                    n_samples=request.n_samples,
+                    samples=request.samples,
                     add_hs=bool(config_options["add_hs"]),
                 )
                 for request in requests

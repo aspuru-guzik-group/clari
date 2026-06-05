@@ -31,7 +31,7 @@ Do not reference deleted modules: `cli.py`, `sampler.py`, `runner.py`, `io.py`.
 - `smiles: str | list[tuple[str, int]]` — single-component SMILES string, or list of `(smiles, copies)` pairs for co-crystals
 - `id: str | None = None` — run identifier, used as subdirectory name and row key; auto-generated from SMILES if omitted
 - `copies: int = 4` — molecules per unit cell (single-component only; ignored for co-crystal form)
-- `n_samples: int = 1` — how many candidate structures to generate
+- `samples: int = 1` — how many candidate structures to generate
 - `add_hs: bool | list[bool] = True` — per-component hydrogen addition flag(s)
 
 ## Available models
@@ -51,7 +51,7 @@ Downloaded automatically from HuggingFace (`the-matter-lab/clari`) on first use.
 ```bash
 uv run clari \
   --smiles "CCO" \
-  --n_samples 8 \
+  --samples 8 \
   --output_dir results/ethanol
 ```
 
@@ -69,7 +69,7 @@ uv run clari \
   --copies 1 \
   --smiles "O" \
   --copies 3 \
-  --n_samples 8 \
+  --samples 8 \
   --output_dir results/aspirin_trihydrate
 ```
 
@@ -92,7 +92,7 @@ Config schema:
       "id": "ethanol",
       "smiles": "CCO",
       "copies": 4,
-      "n_samples": 4,
+      "samples": 4,
       "add_hs": true
     },
     {
@@ -101,7 +101,7 @@ Config schema:
         ["CC(=O)Oc1ccccc1C(=O)O", 1],
         ["O", 3]
       ],
-      "n_samples": 4
+      "samples": 4
     }
   ]
 }
@@ -113,7 +113,7 @@ Top-level config keys (all optional, override CLI defaults):
 - `use_ema`, `use_bf16`, `pbar` — booleans
 - `add_hs` — global H-addition default for all requests in this config
 
-Per-request keys: `id`, `smiles`, `copies`, `n_samples`, `add_hs`.
+Per-request keys: `id`, `smiles`, `copies`, `samples`, `add_hs`.
 
 ### All CLI flags
 
@@ -122,7 +122,7 @@ Per-request keys: `id`, `smiles`, `copies`, `n_samples`, `add_hs`.
 | `--smiles` | required | SMILES string (repeatable for co-crystal) |
 | `--copies` | 4 | Molecules per unit cell (repeatable, matched by index to `--smiles`) |
 | `--no_add_hs` | off | Disable H addition for nth component (repeatable, matched by index) |
-| `--n_samples` | 1 | Number of candidate structures to generate |
+| `--samples` | 1 | Number of candidate structures to generate |
 | `--id` | auto | Labels every row in `predictions.parquet` and becomes the CIF subdirectory name. Auto-generated from SMILES if omitted. Valid characters: letters, digits, `.`, `_`, `-`; others are replaced with `_`. Max 80 chars. |
 | `--config` | — | Path to batch JSON config (mutually exclusive with direct SMILES) |
 | `--checkpoint_path` | `clari-m` | Model name (`clari-m/l/h`) or local `.ckpt` path |
@@ -187,20 +187,20 @@ from clari.inference import ClariSampler
 sampler = ClariSampler("clari-m")
 
 # Single molecule — in-memory
-crystals = sampler.sample("CCO", id="ethanol", n_samples=8)
+crystals = sampler.sample("CCO", id="ethanol", samples=8)
 
 # Single molecule — disk-backed
-sampler.sample("CCO", id="ethanol", n_samples=8, output_dir="results/ethanol")
+sampler.sample("CCO", id="ethanol", samples=8, output_dir="results/ethanol")
 
 # Co-crystal: dot-separated SMILES, uniform copies (2 ethanols + 2 waters)
-sampler.sample("CCO.O", id="ethanol_hydrate", copies=2, n_samples=4)
+sampler.sample("CCO.O", id="ethanol_hydrate", copies=2, samples=4)
 
 # Co-crystal: list of SMILES, per-component copies
 sampler.sample(
     ["CC(=O)Oc1ccccc1C(=O)O", "O"],
     id="aspirin_trihydrate",
     copies=[1, 3],
-    n_samples=4,
+    samples=4,
     output_dir="results/aspirin_trihydrate",
 )
 
@@ -209,7 +209,7 @@ sampler.sample(
 `sample()` keyword arguments:
 - `id` — run identifier; auto-generated from SMILES if omitted
 - `copies: int | list[int] = 4` — molecules per unit cell; int for uniform, list for per-component
-- `n_samples: int = 1`
+- `samples: int = 1`
 - `add_hs: bool | list[bool] = True`
 - `output_dir` — if set, writes to disk and returns the output `Path`; predictions at `<output_dir>/predictions.parquet`
 
@@ -230,7 +230,7 @@ export_cifs("results/ethanol", sample_idx=[0, 2]) # specific indices
 export_cifs("results/ethanol", output_dir="my_cifs/ethanol")
 
 # Export directly from an in-memory list of Crystal objects
-crystals = sampler.sample("CCO", id="ethanol", n_samples=8)
+crystals = sampler.sample("CCO", id="ethanol", samples=8)
 export_cifs(crystals, output_dir="my_cifs/", id="ethanol")
 ```
 

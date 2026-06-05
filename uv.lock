@@ -528,6 +528,11 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+uma = [
+    { name = "fairchem-core", marker = "python_full_version >= '3.11'" },
+]
+
+[package.dev-dependencies]
 dev = [
     { name = "matplotlib" },
     { name = "multiprocess" },
@@ -541,14 +546,6 @@ dev = [
     { name = "triton", marker = "sys_platform == 'linux'" },
     { name = "wandb" },
 ]
-uma = [
-    { name = "fairchem-core", marker = "python_full_version >= '3.11'" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "pytest" },
-]
 
 [package.metadata]
 requires-dist = [
@@ -560,33 +557,34 @@ requires-dist = [
     { name = "huggingface-hub", specifier = ">=1.14.0" },
     { name = "jsonargparse" },
     { name = "lightning" },
-    { name = "matplotlib", marker = "extra == 'dev'" },
-    { name = "multiprocess", marker = "extra == 'dev'" },
     { name = "networkx" },
     { name = "numpy" },
-    { name = "p-tqdm", marker = "extra == 'dev'" },
     { name = "polars" },
-    { name = "posebusters", marker = "extra == 'dev'", specifier = ">=0.6.5" },
     { name = "py3dmol" },
     { name = "pymatgen" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.4.0" },
     { name = "rdkit", specifier = ">=2025.9.3" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.15.5" },
     { name = "scipy" },
-    { name = "seaborn", marker = "extra == 'dev'", specifier = ">=0.13.2" },
-    { name = "stopit", marker = "extra == 'dev'" },
     { name = "torch" },
     { name = "torch-geometric" },
-    { name = "torchmetrics", marker = "extra == 'dev'" },
     { name = "tqdm" },
-    { name = "triton", marker = "sys_platform == 'linux' and extra == 'dev'" },
     { name = "typing-extensions", marker = "python_full_version < '3.11'" },
-    { name = "wandb", marker = "extra == 'dev'", specifier = "==0.26" },
 ]
-provides-extras = ["uma", "dev"]
+provides-extras = ["uma"]
 
 [package.metadata.requires-dev]
-dev = [{ name = "pytest", specifier = ">=9.0.3" }]
+dev = [
+    { name = "matplotlib" },
+    { name = "multiprocess" },
+    { name = "p-tqdm" },
+    { name = "posebusters", specifier = ">=0.6.5" },
+    { name = "pytest", specifier = ">=8.4.0" },
+    { name = "ruff", specifier = ">=0.15.5" },
+    { name = "seaborn", specifier = ">=0.13.2" },
+    { name = "stopit" },
+    { name = "torchmetrics" },
+    { name = "triton", marker = "sys_platform == 'linux'" },
+    { name = "wandb", specifier = ">=0.26" },
+]
 
 [[package]]
 name = "click"

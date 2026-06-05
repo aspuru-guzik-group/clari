@@ -13,216 +13,151 @@
 
 <br>
 
-This repository contains code to reproduce the paper: Fast Organic Crystal Structure Prediction with Unit Cell Flow Matching ([arXiv](https://arxiv.org/abs/2606.03199)).
-
 ---
 
 ## Installation
-
-Using pip:
 
 ```bash
 pip install clari
 ```
 
-Or by cloning this repository and running:
+Or from source:
 
 ```bash
 uv sync
 ```
 
-## Usage
+## Inference
 
-### Sampling tutorial
+The workflow has three steps:
 
-The main inference workflow is:
+1. `clari` — sample candidate crystal structures → `predictions.parquet`
+2. `rank` — score with FairChem UMA energy → `rankings.csv`
+3. `export-cifs` — write `.cif` files to disk
 
-1. `clari` — samples candidate crystal structures, writes `predictions.parquet`
-2. `rank` — scores candidates with FairChem UMA, writes `rankings.csv`
-3. `export-cifs` — writes `.cif` files to disk
+Models (`clari-m`, `clari-l`, `clari-h`) download automatically from HuggingFace on first use.
 
-Available models: `clari-m`, `clari-l`, `clari-h`. Models are downloaded automatically from HuggingFace on first use.
-
-**`--copies`** is the number of molecules per unit cell (crystallographic Z value). The default is 4, which covers the most common organic packing motifs.
-
-**Hydrogen atoms** are added automatically. Write SMILES without explicit Hs. Pass `--no_add_hs` once per component to disable H addition for that component — the nth flag applies to the nth molecule in order. The model was trained on all-hydrogen structures, so H atoms should almost always be present.
-
-#### 1. Sample one molecule
+### Single molecule
 
 ```bash
 uv run clari \
   --smiles "CCO" \
   --id ethanol \
-  --n_samples 8 \
+  --samples 8 \
   --output_dir results/ethanol
 ```
 
-Writes:
-- `results/ethanol/predictions.parquet` — one row per sample: `id`, `sample_idx`, `cif`
-- `results/ethanol/config.json` — full run config
+**`--copies`** sets the number of molecules per unit cell (Z value, default 4). **`--id`** labels the output rows and becomes the CIF subdirectory name; auto-generated from SMILES if omitted. Hydrogens are added automatically — write SMILES without explicit Hs.
 
-In simple terms: generate 8 crystal packings for ethanol and save the run.
+### Co-crystal
 
-**`--id`** labels every row in `predictions.parquet` and becomes the subdirectory name when exporting CIFs (e.g. `cifs/ethanol/sample_000000.cif`). If omitted, an id is auto-generated from the SMILES string. Valid characters are letters, digits, `.`, `_`, and `-`; anything else is replaced with `_`. Max 80 characters.
-
-#### 2. Sample a co-crystal
-
-Repeating `--smiles` in one call describes one multi-component composition, not multiple jobs:
+Repeated `--smiles` flags describe one multi-component composition:
 
 ```bash
 uv run clari \
-  --smiles "CC(=O)Oc1ccccc1C(=O)O" \
-  --copies 1 \
-  --smiles "O" \
-  --copies 3 \
-  --n_samples 8 \
+  --smiles "CC(=O)Oc1ccccc1C(=O)O" --copies 1 \
+  --smiles "O"                       --copies 3 \
+  --samples 8 \
   --output_dir results/aspirin_trihydrate
 ```
 
-In simple terms: sample one crystal made of one aspirin and three water molecules per unit cell.
+### Batch via config
 
-#### 3. Sample a batch from config
-
-For multiple independent requests, use `--config` with a JSON file:
+```bash
+uv run clari --config batch.json
+```
 
 ```json
 {
   "checkpoint_path": "clari-m",
   "output_dir": "results/batch_run",
   "requests": [
-    {
-      "id": "ethanol",
-      "smiles": "CCO",
-      "copies": 4,
-      "n_samples": 4
-    },
+    { "id": "ethanol", "smiles": "CCO", "copies": 4, "samples": 4 },
     {
       "id": "aspirin_trihydrate",
-      "smiles": [
-        ["CC(=O)Oc1ccccc1C(=O)O", 1],
-        ["O", 3]
-      ],
-      "n_samples": 4
+      "smiles": [["CC(=O)Oc1ccccc1C(=O)O", 1], ["O", 3]],
+      "samples": 4
     }
   ]
 }
 ```
 
-```bash
-uv run clari --config batch.json
-```
+Top-level keys (all optional): `checkpoint_path`, `output_dir`, `use_ema`, `use_bf16`, `pbar`, `add_hs`.
+Per-request keys: `id`, `smiles`, `copies`, `samples`, `add_hs`.
 
-Top-level config keys (all optional): `checkpoint_path`, `output_dir`, `use_ema`, `use_bf16`, `pbar`, `add_hs` (global H-addition default for all requests).
+### Rank
 
-Per-request keys: `id`, `smiles`, `copies`, `n_samples`, `add_hs`.
-
-#### 4. Rank samples
-
-Ranking requires `fairchem-core`:
+Requires `fairchem-core`:
 
 ```bash
-pip install "clari[uma]"
-# or from source:
-uv sync --extra uma
-```
-
-```bash
+pip install "clari[uma]"   # or: uv sync --extra uma
 uv run rank results/ethanol
 ```
 
-Writes:
-- `results/ethanol/energies.csv` — `sample_idx`, `energies` (UMA energy per structure)
-- `results/ethanol/rankings.csv` — `sample_idx`, `id`, `energies`, `rank` (0-based within each `id` group)
-
-#### 5. Export CIF files
+### Export CIFs
 
 ```bash
-# All samples
-uv run export-cifs results/ethanol
-
-# Top 3 ranked (requires rankings.csv)
-uv run export-cifs results/ethanol --top_k 3
-
-# Specific sample indices
+uv run export-cifs results/ethanol                         # all samples
+uv run export-cifs results/ethanol --top_k 3               # top 3 ranked (requires rankings.csv)
 uv run export-cifs results/ethanol --sample_idx 0 --sample_idx 2
-
-# Filter by request id
-uv run export-cifs results/ethanol --ids ethanol
-
-# Custom output directory
+uv run export-cifs results/batch_run --ids ethanol         # one molecule from a batch parquet
 uv run export-cifs results/ethanol --output_dir my_cifs/
 ```
 
-`export-cifs` works with or without `rankings.csv`. Without it, all samples are exported and named by index. With it, filenames include the rank and `--top_k` filtering becomes available.
+Filenames: `<id>/sample_000000.cif` without rankings, `<id>/rank_0000_sample_000000.cif` with.
 
-CIF filenames:
-- Without rankings: `<id>/sample_000000.cif`
-- With rankings: `<id>/rank_0000_sample_000000.cif`
-
-#### 6. Python API
+### Python API
 
 ```python
 from clari.inference import ClariSampler
 
 sampler = ClariSampler("clari-m")
 
-# Single molecule — in-memory
-crystals = sampler.sample("CCO", id="ethanol", n_samples=8)
+crystals = sampler.sample("CCO", id="ethanol", samples=8)                    # in-memory
+sampler.sample("CCO", id="ethanol", samples=8, output_dir="results/ethanol") # disk-backed
 
-# Single molecule — disk-backed
-sampler.sample("CCO", id="ethanol", n_samples=8, output_dir="results/ethanol")
-
-# Co-crystal: dot-separated SMILES, uniform copies (2 ethanols + 2 waters per cell)
-sampler.sample("CCO.O", id="ethanol_hydrate", copies=2, n_samples=4)
-
-# Co-crystal: list of SMILES, per-component copies (1 aspirin + 3 waters per cell)
+# Co-crystal: dot-separated SMILES (uniform copies) or list (per-component copies)
+sampler.sample("CCO.O", id="ethanol_hydrate", copies=2, samples=4)
 sampler.sample(
     ["CC(=O)Oc1ccccc1C(=O)O", "O"],
     id="aspirin_trihydrate",
     copies=[1, 3],
-    n_samples=4,
+    samples=4,
     output_dir="results/aspirin_trihydrate",
 )
 ```
 
-`sample()` keyword arguments: `id` (auto-generated from SMILES if omitted), `copies` (default 4, int or list of ints for per-component), `n_samples` (default 1), `add_hs` (`bool` or `list[bool]`, default `True`), `output_dir`.
+`sample()` kwargs: `id`, `copies` (int or list, default 4), `samples` (default 1), `add_hs` (bool or list, default `True`), `output_dir`.
 
-#### 7. Rank and export from Python
+### Rank and export from Python
 
 ```python
 from clari.inference import rank, export_cifs
 
-# Rank by UMA energy — writes energies.csv and rankings.csv (requires a path, not in-memory)
-rank("results/ethanol")
+rank("results/ethanol")  # requires a path — does not work on in-memory Crystal lists
 
-# Export from disk
 export_cifs("results/ethanol")
-export_cifs("results/ethanol", top_k=3)           # top 3 ranked (requires rankings.csv)
-export_cifs("results/ethanol", sample_idx=[0, 2]) # specific indices
+export_cifs("results/ethanol", top_k=3)
+export_cifs("results/ethanol", sample_idx=[0, 2])
 export_cifs("results/ethanol", output_dir="my_cifs/ethanol")
 
-# Export directly from an in-memory list of Crystal objects
-crystals = sampler.sample("CCO", id="ethanol", n_samples=8)
+# From an in-memory list
 export_cifs(crystals, output_dir="my_cifs/", id="ethanol")
 ```
 
-Agent-facing inference reference: [clari/inference/SKILL.md](clari/inference/SKILL.md).
+See also: [inference reference](clari/inference/SKILL.md).
 
-## Development Installation
-
-To install the full development environment:
+## Development
 
 ```bash
-uv sync --extra dev
+uv sync --group dev
 ```
 
-⚠️ To generate data and run COMPACK, we require the **CCDC SDK**, whose dependencies conflict with FairChem. Thus, some scripts run as standalone uv scripts that resolve their own isolated environments from the CCDC index. The first invocation of `uv run -s *.py ...` resolves and caches that environment. You will still need a valid CCDC license configured on the machine.
+⚠️ Data generation and COMPACK require the **CCDC SDK**, which conflicts with FairChem. Those scripts run as standalone `uv -s` scripts with their own isolated environments. A valid CCDC license must be configured on the machine.
 
 ## Data
 
-### Generation
-
-We expect the final data folder to be structured as follows:
+Expected layout:
 
 ```
 data/
@@ -231,62 +166,37 @@ data/
         csd_conquest.parquet
     csd/
         config.json
-        metdata.parquet
+        metadata.parquet
         {train,val,test}.pt
 ```
 
-To generate the data, first extract the metadata of entries in CSD:
-
-```
-uv run -s scripts/data/0_metadata.py
-```
-
-This creates the `csd_metadata.parquet` file from above. Next, download **ALL** of CSD in `.mol2` and `.cif` format using ConQuest (not `csd-python-api` since it sanitizes molecules and removes some bond information) into the `csd_conquest.parquet` file. Finally, generate the `data/csd` folder with:
-
-```
-uv run python -m scripts.data.1_process --num_workers=16
+```bash
+uv run -s scripts/data/0_metadata.py                          # extract CSD metadata
+# download CSD via ConQuest into csd_conquest.parquet
+uv run python -m scripts.data.1_process --num_workers=16      # build data/csd/
 ```
 
-For reference, the CSD refcodes we use and our dataset split are uploaded to [HuggingFace](https://huggingface.co/the-matter-lab/clari).
+CSD refcodes and dataset splits are on [HuggingFace](https://huggingface.co/the-matter-lab/clari).
 
 ## Evaluation
 
-Training and evaluation paths default to `data/`, `results/`, and `logs/` under the current working directory. Override them with `CLARI_DATA_DIR`, `CLARI_RESULTS_DIR`, and `CLARI_LOG_DIR`; see [`clari/paths.py`](clari/paths.py).
-
-### OXtal and Teaching Test Sets
-
-To reproduce the paper numbers for a Hub model or local checkpoint, run the stages below in order. Each stage writes into the same `<experiment_dir>` and reads what the previous stage produced.
-
-These evaluation commands require the prepared `data/csd` directory described above. When running CLARI from an installed package, run the commands from a working directory containing `data/csd`, or set `CLARI_DATA_DIR=/path/to/data`.
+Paths default to `data/`, `results/`, `logs/` under the working directory. Override with `CLARI_DATA_DIR`, `CLARI_RESULTS_DIR`, `CLARI_LOG_DIR` (see [`clari/paths.py`](clari/paths.py)).
 
 ```bash
-# 0. One-time: build the GT CIF cache the standalone compack script reads
-uv run python clari/evaluation/build_test_cifs_cache.py
+uv run python clari/evaluation/build_test_cifs_cache.py          # one-time GT CIF cache
 
-# 1. Sample the CSD test set, creates a folder results/experiment_dir.
-#    Use clari-m, clari-l, or a local checkpoint path as the first argument.
 uv run sample-test clari-m <num_samples> <experiment_dir> --subset <teaching/oxtal>
 
-# 2. Clash check (writes collision.csv)
-uv run collision <experiment_dir>
+uv run collision <experiment_dir>                                 # writes collision.csv
 
-# 3. UMA energies (writes energies.csv)
-uv run compute-energies <experiment_dir>
+uv run compute-energies <experiment_dir>                          # writes energies.csv
 
-# 4. COMPACK packing similarity (writes compack.csv, isolated uv script env)
-uv run -s clari/evaluation/compack.py <experiment_dir> --num_processes n
+uv run -s clari/evaluation/compack.py <experiment_dir> --num_processes <n> # writes compack.csv
 
-# 5. Summary table (SolC per subset, all k)
-uv run summarize <experiment_dir>
+uv run summarize <experiment_dir>                                 # SolC per subset
 ```
 
-### Ablations
-
-The exact commands used for to train our ablated and final models can be found in `scripts/train`. After running inference as above, the metrics used for ablations are defined in:
-
-```
-from clari.pipelines.utils.metrics import assess_crystals_eval
-```
+Ablation metrics: `from clari.pipelines.utils.metrics import assess_crystals_eval`. Training scripts are in `scripts/train/`.
 
 ## Citation
 

@@ -68,7 +68,7 @@ def build_run_config(
                 "id": request.id,
                 "smiles": request.smiles,
                 "copies": request.copies,
-                "n_samples": request.n_samples,
+                "samples": request.samples,
                 "add_hs": request.add_hs,
             }
             for request in requests
@@ -261,12 +261,12 @@ class ClariSampler:
         self,
         request: SampleRequest,
         *,
-        n_samples: int | None = None,
+        samples: int | None = None,
         batch_size: int | None = None,
         progress: tqdm | None = None,
     ) -> list[Crystal]:
         crystal = request_to_crystal(request)
-        target_samples = request.n_samples if n_samples is None else n_samples
+        target_samples = request.samples if samples is None else samples
         per_batch = min(
             target_samples, auto_batch_size(int(crystal.num_atoms), batch_size, self.device)
         )
@@ -286,7 +286,7 @@ class ClariSampler:
         *,
         id: str | None = None,
         copies: int | list[int] = 4,
-        n_samples: int = 1,
+        samples: int = 1,
         add_hs: bool | list[bool] = True,
         output_dir: str | Path | None = None,
         batch_size: int | None = None,
@@ -300,7 +300,7 @@ class ClariSampler:
             requests = list(smiles)
         else:
             requests = [
-                _make_request(smiles, id=id, copies=copies, n_samples=n_samples, add_hs=add_hs)
+                _make_request(smiles, id=id, copies=copies, samples=samples, add_hs=add_hs)
             ]
         num_gpus = self.num_gpus if num_gpus is None else num_gpus
         if output_dir is None and num_gpus > 1:
@@ -308,7 +308,7 @@ class ClariSampler:
         if output_dir is None:
             progress = (
                 tqdm(
-                    total=sum(request.n_samples for request in requests),
+                    total=sum(request.samples for request in requests),
                     desc="Sampling",
                     unit="sample",
                 )
@@ -346,8 +346,8 @@ def build_chunks(
     for request_index, request in enumerate(requests):
         crystal = request_to_crystal(request)
         chunk_size = auto_batch_size(int(crystal.num_atoms), batch_size, device)
-        for local_start in range(0, request.n_samples, chunk_size):
-            count = min(chunk_size, request.n_samples - local_start)
+        for local_start in range(0, request.samples, chunk_size):
+            count = min(chunk_size, request.samples - local_start)
             chunks.append(
                 {
                     "request_index": request_index,
@@ -356,7 +356,7 @@ def build_chunks(
                     "shard_index": len(chunks),
                 }
             )
-        sample_idx += request.n_samples
+        sample_idx += request.samples
     return chunks
 
 
@@ -402,7 +402,7 @@ def run_chunks(
             request = requests[chunk["request_index"]]
             samples = sampler.sample_request(
                 request,
-                n_samples=chunk["count"],
+                samples=chunk["count"],
                 batch_size=chunk["count"],
                 progress=progress,
             )
@@ -574,15 +574,15 @@ def sample_trajectory(
     id: str | None = None,
     copies: int | list[int] = 4,
     add_hs: bool | list[bool] = True,
-    n_samples: int = 1,
+    samples: int = 1,
 ) -> list[CrystalTrajectory]:
     """Demo-only: sample crystal structures and return their full diffusion trajectories."""
-    request = _make_request(smiles, id=id, copies=copies, n_samples=n_samples, add_hs=add_hs)
+    request = _make_request(smiles, id=id, copies=copies, samples=samples, add_hs=add_hs)
     template = request_to_crystal(request)
     batch = Crystal.collate([template]).to(sampler.device)
 
     results = []
-    for _ in range(n_samples):
+    for _ in range(samples):
         with torch.autocast(
             device_type=sampler.device.type,
             dtype=torch.bfloat16,

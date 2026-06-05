@@ -28,7 +28,7 @@ class SampleRequest:
     smiles: str | list[tuple[str, int]]
     id: str | None = None
     copies: int = 4
-    n_samples: int = 1
+    samples: int = 1
     add_hs: bool | list[bool] = True
 
     def __post_init__(self) -> None:
@@ -56,14 +56,14 @@ def _make_request(
     *,
     id: str | None,
     copies: int | list[int],
-    n_samples: int,
+    samples: int,
     add_hs: bool | list[bool],
 ) -> SampleRequest:
     components = _smiles_to_components(smiles, copies)
     if len(components) == 1:
         s, c = components[0]
-        return SampleRequest(smiles=s, id=id, copies=c, n_samples=n_samples, add_hs=add_hs)
-    return SampleRequest(smiles=components, id=id, copies=1, n_samples=n_samples, add_hs=add_hs)
+        return SampleRequest(smiles=s, id=id, copies=c, samples=samples, add_hs=add_hs)
+    return SampleRequest(smiles=components, id=id, copies=1, samples=samples, add_hs=add_hs)
 
 
 def resolve_hub_checkpoint(model: str) -> str:
@@ -91,7 +91,7 @@ def build_request(
     *,
     id: str | None = None,
     copies: int = 4,
-    n_samples: int = 1,
+    samples: int = 1,
     add_hs: bool | list[bool] = True,
 ) -> SampleRequest:
     if isinstance(smiles, str):
@@ -100,7 +100,7 @@ def build_request(
             id=request_id,
             smiles=smiles,
             copies=copies,
-            n_samples=n_samples,
+            samples=samples,
             add_hs=add_hs,
         )
     if not smiles:
@@ -113,7 +113,7 @@ def build_request(
         id=request_id,
         smiles=parts,
         copies=1,
-        n_samples=n_samples,
+        samples=samples,
         add_hs=add_hs,
     )
 
@@ -129,7 +129,7 @@ def parse_cli_request(
     smiles_flags: list[str] | None,
     copies_flags: list[str] | list[int] | None,
     request_id: str | None,
-    n_samples: int,
+    samples: int,
     no_add_hs_flags: list | None,
 ) -> list[SampleRequest]:
     parts: list[tuple[str, int]] = []
@@ -163,11 +163,11 @@ def parse_cli_request(
                 smiles,
                 id=request_id,
                 copies=copies,
-                n_samples=n_samples,
+                samples=samples,
                 add_hs=add_hs_per_component[0],
             )
         ]
-    return [build_request(parts, id=request_id, n_samples=n_samples, add_hs=add_hs_per_component)]
+    return [build_request(parts, id=request_id, samples=samples, add_hs=add_hs_per_component)]
 
 
 def parse_config_requests(
@@ -190,7 +190,7 @@ def parse_config_requests(
                     smiles,
                     id=item.get("id"),
                     copies=int(item.get("copies", 4)),
-                    n_samples=int(item.get("n_samples", 1)),
+                    samples=int(item.get("samples", 1)),
                     add_hs=bool(item.get("add_hs", add_hs_default)),
                 )
             )
@@ -203,7 +203,7 @@ def parse_config_requests(
                 build_request(
                     [(str(part), int(part_copies)) for part, part_copies in smiles],
                     id=item.get("id"),
-                    n_samples=int(item.get("n_samples", 1)),
+                    samples=int(item.get("samples", 1)),
                     add_hs=bool(item.get("add_hs", add_hs_default)),
                 )
             )
