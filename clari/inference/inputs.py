@@ -18,18 +18,25 @@ HUB_MODELS: dict[str, tuple[str, str]] = {
 }
 
 
+def sanitize_id(text: str) -> str:
+    text = re.sub(r"[^A-Za-z0-9._-]+", "_", text).strip("_")
+    return text[:80] or "sample"
+
+
 @dataclass
 class SampleRequest:
-    id: str
     smiles: str | list[tuple[str, int]]
+    id: str | None = None
     copies: int = 4
     n_samples: int = 1
     add_hs: bool | list[bool] = True
 
-
-def sanitize_id(text: str) -> str:
-    text = re.sub(r"[^A-Za-z0-9._-]+", "_", text).strip("_")
-    return text[:80] or "sample"
+    def __post_init__(self) -> None:
+        if self.id is None:
+            if isinstance(self.smiles, str):
+                self.id = sanitize_id(f"{self.smiles}_x{self.copies}")
+            else:
+                self.id = sanitize_id("_".join(f"{s}_x{c}" for s, c in self.smiles))
 
 
 def _smiles_to_components(
@@ -126,7 +133,7 @@ def parse_cli_request(
     copies_flags: list[str] | list[int] | None,
     request_id: str | None,
     n_samples: int,
-    no_add_hs_count: int,
+    no_add_hs_flags: list | None,
 ) -> list[SampleRequest]:
     parts: list[tuple[str, int]] = []
     idx = 0
@@ -150,6 +157,7 @@ def parse_cli_request(
         parts.append((smiles, copies))
     if not parts:
         raise ValueError("Provide direct SMILES input or a config file.")
+    no_add_hs_count = len(no_add_hs_flags) if no_add_hs_flags else 0
     add_hs_per_component = [i >= no_add_hs_count for i in range(len(parts))]
     if len(parts) == 1:
         smiles, copies = parts[0]

@@ -165,7 +165,7 @@ class ClariSampler:
         use_ema: bool = True,
         use_bf16: bool = True,
         n_steps: int | None = 50,
-        compile: bool | None = None,
+        compile: bool = False,
         torch_threads: int = 1,
         num_gpus: int = 1,
     ):
@@ -184,7 +184,6 @@ class ClariSampler:
         resolved_device = resolve_device(device)
         torch.set_num_threads(torch_threads)
         torch.set_float32_matmul_precision("high")
-        compile = resolved_device.type == "cuda" if compile is None else compile
         self.lit = load_lit(checkpoint, resolved_device, use_ema, n_steps, compile)
         self.device = resolved_device
         self.checkpoint_path = str(checkpoint)
@@ -204,7 +203,7 @@ class ClariSampler:
         use_ema: bool = True,
         use_bf16: bool = True,
         n_steps: int | None = 50,
-        compile: bool | None = None,
+        compile: bool = False,
         torch_threads: int = 1,
         num_gpus: int = 1,
     ) -> ClariSampler:
@@ -293,7 +292,7 @@ class ClariSampler:
         num_gpus: int | None = None,
         overwrite: bool = False,
         pbar: bool = True,
-    ) -> list[Crystal]:
+    ) -> list[Crystal] | Path:
         if isinstance(smiles, SampleRequest):
             requests = [smiles]
         elif isinstance(smiles, list) and smiles and isinstance(smiles[0], SampleRequest):
@@ -482,7 +481,7 @@ def sample_to_directory(
     shards_dir = output_dir / ".shards"
     shards_dir.mkdir()
     if num_gpus == 1:
-        crystals = run_chunks(sampler, requests, chunks, shards_dir, pbar=pbar)
+        run_chunks(sampler, requests, chunks, shards_dir, pbar=pbar)
     else:
         if not torch.cuda.is_available():
             raise RuntimeError(f"Requested {num_gpus} GPUs, but CUDA is not available")
@@ -512,10 +511,9 @@ def sample_to_directory(
             proc.join()
             if proc.exitcode != 0:
                 raise RuntimeError(f"Sampling worker failed with exit code {proc.exitcode}")
-        crystals = []
     merge_shards(shards_dir, output_dir / "predictions.parquet")
     shutil.rmtree(shards_dir)
-    return crystals
+    return output_dir
 
 
 @torch.inference_mode()
@@ -530,11 +528,11 @@ def sample(
     n_steps: int | None = 50,
     use_ema: bool = True,
     use_bf16: bool = True,
-    compile: bool | None = None,
+    compile: bool = False,
     torch_threads: int = 1,
     overwrite: bool = False,
     pbar: bool = True,
-) -> list[Crystal]:
+) -> list[Crystal] | Path:
     sampler = ClariSampler(
         checkpoint_path,
         device=device,

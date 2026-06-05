@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import sys
-from pathlib import Path
 
 from jsonargparse import ArgumentParser
 
@@ -34,7 +33,7 @@ def build_parser() -> ArgumentParser:
     parser.add_argument("--overwrite", action="store_true")
     parser.add_argument("--no_ema", action="store_true")
     parser.add_argument("--no_bf16", action="store_true")
-    parser.add_argument("--no_add_hs", action="count", default=0)
+    parser.add_argument("--no_add_hs", action="append_const", const=True, default=None)
     parser.add_argument("--no_pbar", action="store_true")
     return parser
 
@@ -44,11 +43,11 @@ def main(argv: list[str] | None = None) -> int:
     try:
         args = vars(parser.parse_args(argv))
         config_path = args.pop("config")
-        no_add_hs_count = args.pop("no_add_hs")
+        no_add_hs_flags = args.pop("no_add_hs")
         config_options = {}
         if config_path:
             requests, config_options = parse_config_requests(
-                config_path, add_hs_default=no_add_hs_count == 0
+                config_path, add_hs_default=no_add_hs_flags is None
             )
             for key, value in config_options.items():
                 if key in args and args[key] == parser.get_default(key):
@@ -60,7 +59,7 @@ def main(argv: list[str] | None = None) -> int:
                 args.pop("copies"),
                 args.pop("id"),
                 args.pop("n_samples"),
-                no_add_hs_count,
+                no_add_hs_flags,
             )
         use_ema = False if args["no_ema"] else bool(config_options.get("use_ema", True))
         use_bf16 = False if args["no_bf16"] else bool(config_options.get("use_bf16", True))
@@ -95,7 +94,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
     if args["output_dir"]:
-        print(Path(args["output_dir"]) / "predictions.parquet")
+        print(result / "predictions.parquet")
     else:
         print(f"Generated {len(result)} samples.")
     return 0
