@@ -50,7 +50,7 @@ uv run clari \
   --output_dir results/ethanol
 ```
 
-**`--copies`** sets the number of molecules per unit cell (Z value, default 4). **`--id`** labels the output rows and becomes the CIF subdirectory name; auto-generated from SMILES if omitted. Hydrogens are added automatically — write SMILES without explicit Hs.
+**`--copies`** sets the number of molecules per unit cell (Z value, default 4). **`--id`** labels the output rows and becomes the CIF subdirectory name; auto-generated from SMILES if omitted.
 
 ### Co-crystal
 
@@ -86,8 +86,8 @@ uv run clari --config batch.json
 }
 ```
 
-Top-level keys (all optional): `checkpoint_path`, `output_dir`, `use_ema`, `use_bf16`, `pbar`, `add_hs`.
-Per-request keys: `id`, `smiles`, `copies`, `samples`, `add_hs`, `batch_size`.
+Top-level keys (all optional): `checkpoint_path`, `output_dir`, `use_ema`, `use_bf16`, `pbar`.
+Per-request keys: `id`, `smiles`, `copies`, `samples`, `batch_size`.
 
 ### Rank
 
@@ -131,7 +131,7 @@ sampler.sample(
 )
 ```
 
-`sample()` kwargs: `id`, `copies` (int or list, default 4), `samples` (default 1), `add_hs` (bool or list, default `True`), `output_dir`.
+`sample()` kwargs: `id`, `copies` (int or list, default 4), `samples` (default 1), `output_dir`.
 
 ### Rank and export from Python
 
