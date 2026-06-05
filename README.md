@@ -22,7 +22,12 @@ This repository contains code to reproduce the paper: Fast Organic Crystal Struc
 To install only the required packages for CLARI to run inference:
 
 ```bash
-pip install clari-csp
+pip install clari
+```
+
+or by cloning the repository and running
+```bash
+uv sync
 ```
 
 ## Inference
