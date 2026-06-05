@@ -95,7 +95,7 @@ Requires `fairchem-core`:
 
 ```bash
 pip install "clari[uma]"   # or: uv sync --extra uma
-uv run rank results/ethanol
+uv run --extra uma rank results/ethanol
 ```
 
 ### Export CIFs
