@@ -25,14 +25,11 @@ Do not reference deleted modules: `cli.py`, `sampler.py`, `runner.py`, `io.py`.
 
 **`--copies` (Z value):** Number of molecules per unit cell. Default is 4, which covers the most common organic packing motifs. Use smaller values (1–2) for large molecules or to explore low-Z polymorphs. For multi-component requests (co-crystals), `copies` is per-component.
 
-**Hydrogen atoms:** The model was trained on all-hydrogen crystal structures, so H atoms must be present. By default, CLARI calls `Chem.AddHs` on each molecule before building the graph. Pass `--no_add_hs` once per component to disable H addition for that component — the nth flag applies to the nth molecule in order. Always write SMILES without explicit Hs unless you have a specific reason not to.
-
 **`SampleRequest`:** The core data object. Fields:
 - `smiles: str | list[tuple[str, int]]` — single-component SMILES string, or list of `(smiles, copies)` pairs for co-crystals
 - `id: str | None = None` — run identifier, used as subdirectory name and row key; auto-generated from SMILES if omitted
 - `copies: int = 4` — molecules per unit cell (single-component only; ignored for co-crystal form)
 - `samples: int = 1` — how many candidate structures to generate
-- `add_hs: bool | list[bool] = True` — per-component hydrogen addition flag(s)
 
 ## Available models
 
@@ -92,8 +89,7 @@ Config schema:
       "id": "ethanol",
       "smiles": "CCO",
       "copies": 4,
-      "samples": 4,
-      "add_hs": true
+      "samples": 4
     },
     {
       "id": "aspirin_trihydrate",
@@ -111,9 +107,7 @@ Top-level config keys (all optional, override CLI defaults):
 - `checkpoint_path` — model name or local path
 - `output_dir` — where to write results
 - `use_ema`, `use_bf16`, `pbar` — booleans
-- `add_hs` — global H-addition default for all requests in this config
-
-Per-request keys: `id`, `smiles`, `copies`, `samples`, `add_hs`, `batch_size`.
+Per-request keys: `id`, `smiles`, `copies`, `samples`, `batch_size`.
 
 ### All CLI flags
 
@@ -121,7 +115,6 @@ Per-request keys: `id`, `smiles`, `copies`, `samples`, `add_hs`, `batch_size`.
 |------|---------|-------------|
 | `--smiles` | required | SMILES string (repeatable for co-crystal) |
 | `--copies` | 4 | Molecules per unit cell (repeatable, matched by index to `--smiles`) |
-| `--no_add_hs` | off | Disable H addition for nth component (repeatable, matched by index) |
 | `--samples` | 1 | Number of candidate structures to generate |
 | `--id` | auto | Labels every row in `predictions.parquet` and becomes the CIF subdirectory name. Auto-generated from SMILES if omitted. Valid characters: letters, digits, `.`, `_`, `-`; others are replaced with `_`. Max 80 chars. |
 | `--config` | — | Path to batch JSON config (mutually exclusive with direct SMILES) |
@@ -210,7 +203,6 @@ sampler.sample(
 - `id` — run identifier; auto-generated from SMILES if omitted
 - `copies: int | list[int] = 4` — molecules per unit cell; int for uniform, list for per-component
 - `samples: int = 1`
-- `add_hs: bool | list[bool] = True`
 - `output_dir` — if set, writes to disk and returns the output `Path`; predictions at `<output_dir>/predictions.parquet`
 
 `ClariSampler` constructor: `checkpoint` (hub name `"clari-m/l/h"` or local `.ckpt` path), `device` (default `"auto"`), `use_ema` (default `True`), `use_bf16` (default `True`), `n_steps` (default `50`), `compile` (default `False`), `num_gpus` (default `1`). Use `ClariSampler.from_checkpoint(path)` to be explicit about loading a local file.

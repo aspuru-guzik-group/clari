@@ -5,7 +5,6 @@ import sys
 from jsonargparse import ArgumentParser
 
 from clari.inference.inputs import (
-    SampleRequest,
     parse_cli_request,
     parse_config_requests,
 )
@@ -33,7 +32,6 @@ def build_parser() -> ArgumentParser:
     parser.add_argument("--overwrite", action="store_true")
     parser.add_argument("--no_ema", action="store_true")
     parser.add_argument("--no_bf16", action="store_true")
-    parser.add_argument("--no_add_hs", action="append_const", const=True, default=None)
     parser.add_argument("--no_pbar", action="store_true")
     return parser
 
@@ -43,12 +41,9 @@ def main(argv: list[str] | None = None) -> int:
     try:
         args = vars(parser.parse_args(argv))
         config_path = args.pop("config")
-        no_add_hs_flags = args.pop("no_add_hs")
         config_options = {}
         if config_path:
-            requests, config_options = parse_config_requests(
-                config_path, add_hs_default=no_add_hs_flags is None
-            )
+            requests, config_options = parse_config_requests(config_path)
             for key, value in config_options.items():
                 if key in args and args[key] == parser.get_default(key):
                     args[key] = value
@@ -59,27 +54,12 @@ def main(argv: list[str] | None = None) -> int:
                 args.pop("copies"),
                 args.pop("id"),
                 args.pop("samples"),
-                no_add_hs_flags,
             )
         use_ema = False if args["no_ema"] else bool(config_options.get("use_ema", True))
         use_bf16 = False if args["no_bf16"] else bool(config_options.get("use_bf16", True))
         pbar = False if args["no_pbar"] else bool(config_options.get("pbar", True))
-        if config_path and "add_hs" in config_options:
-            if no_add_hs_flags:
-                print(
-                    "Warning: --no_add_hs ignored because add_hs is set in the config file.",
-                    file=sys.stderr,
-                )
-            requests = [
-                SampleRequest(
-                    id=request.id,
-                    smiles=request.smiles,
-                    copies=request.copies,
-                    samples=request.samples,
-                    add_hs=bool(config_options["add_hs"]),
-                )
-                for request in requests
-            ]
+        if args["output_dir"] is None:
+            raise ValueError("`--output_dir` is required for CLI sampling.")
         result = sample(
             requests,
             checkpoint_path=args["checkpoint_path"],
@@ -98,10 +78,7 @@ def main(argv: list[str] | None = None) -> int:
     except Exception as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
-    if args["output_dir"]:
-        print(result / "predictions.parquet")
-    else:
-        print(f"Generated {len(result)} samples.")
+    print(result / "predictions.parquet")
     return 0
 
 

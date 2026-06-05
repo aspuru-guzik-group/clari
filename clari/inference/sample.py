@@ -37,7 +37,6 @@ def request_to_crystal(request: SampleRequest) -> Crystal:
     return Crystal.from_smiles(
         request_components(request),
         csd_id=request.id,
-        add_hs=request.add_hs,
     )
 
 
@@ -69,7 +68,6 @@ def build_run_config(
                 "smiles": request.smiles,
                 "copies": request.copies,
                 "samples": request.samples,
-                "add_hs": request.add_hs,
             }
             for request in requests
         ],
@@ -287,7 +285,6 @@ class ClariSampler:
         id: str | None = None,
         copies: int | list[int] = 4,
         samples: int = 1,
-        add_hs: bool | list[bool] = True,
         output_dir: str | Path | None = None,
         batch_size: int | None = None,
         num_gpus: int | None = None,
@@ -299,9 +296,7 @@ class ClariSampler:
         elif isinstance(smiles, list) and smiles and isinstance(smiles[0], SampleRequest):
             requests = list(smiles)
         else:
-            requests = [
-                _make_request(smiles, id=id, copies=copies, samples=samples, add_hs=add_hs)
-            ]
+            requests = [_make_request(smiles, id=id, copies=copies, samples=samples)]
         num_gpus = self.num_gpus if num_gpus is None else num_gpus
         if output_dir is None and num_gpus > 1:
             raise ValueError("num_gpus > 1 requires output_dir.")
@@ -586,11 +581,10 @@ def sample_trajectory(
     *,
     id: str | None = None,
     copies: int | list[int] = 4,
-    add_hs: bool | list[bool] = True,
     samples: int = 1,
 ) -> list[CrystalTrajectory]:
     """Demo-only: sample crystal structures and return their full diffusion trajectories."""
-    request = _make_request(smiles, id=id, copies=copies, samples=samples, add_hs=add_hs)
+    request = _make_request(smiles, id=id, copies=copies, samples=samples)
     template = request_to_crystal(request)
     batch = Crystal.collate([template]).to(sampler.device)
 
