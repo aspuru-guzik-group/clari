@@ -28,8 +28,8 @@ Do not reference deleted modules: `cli.py`, `sampler.py`, `runner.py`, `io.py`.
 **Hydrogen atoms:** The model was trained on all-hydrogen crystal structures, so H atoms must be present. By default, CLARI calls `Chem.AddHs` on each molecule before building the graph. Pass `--no_add_hs` once per component to disable H addition for that component — the nth flag applies to the nth molecule in order. Always write SMILES without explicit Hs unless you have a specific reason not to.
 
 **`SampleRequest`:** The core data object. Fields:
-- `id: str` — run identifier, used as subdirectory name and row key
 - `smiles: str | list[tuple[str, int]]` — single-component SMILES string, or list of `(smiles, copies)` pairs for co-crystals
+- `id: str | None = None` — run identifier, used as subdirectory name and row key; auto-generated from SMILES if omitted
 - `copies: int = 4` — molecules per unit cell (single-component only; ignored for co-crystal form)
 - `n_samples: int = 1` — how many candidate structures to generate
 - `add_hs: bool | list[bool] = True` — per-component hydrogen addition flag(s)
@@ -132,7 +132,7 @@ Per-request keys: `id`, `smiles`, `copies`, `n_samples`, `add_hs`.
 | `--device` | auto | `cuda`, `mps`, `cpu`, or `cuda:N` |
 | `--n_steps` | 50 | Flow matching steps |
 | `--torch_threads` | 1 | CPU thread count |
-| `--compile` | auto | `torch.compile` (auto-enabled on CUDA) |
+| `--compile` | off | Enable `torch.compile` (off by default; gives a meaningful speedup on CUDA after cold-start) |
 | `--overwrite` | off | Overwrite existing output directory |
 | `--no_ema` | off | Use raw weights instead of EMA weights |
 | `--no_bf16` | off | Disable bfloat16 (CUDA only) |
@@ -204,25 +204,35 @@ sampler.sample(
     output_dir="results/aspirin_trihydrate",
 )
 
-# Batch — pass list[SampleRequest]
-from clari.inference import SampleRequest
-sampler.sample(
-    [
-        SampleRequest(id="ethanol", smiles="CCO", n_samples=4),
-        SampleRequest(id="aspirin_trihydrate", smiles=[("CC(=O)Oc1ccccc1C(=O)O", 1), ("O", 3)], n_samples=4),
-    ],
-    output_dir="results/batch",
-)
 ```
 
-`sample()` keyword arguments (used when first arg is a SMILES string or list of strings):
+`sample()` keyword arguments:
 - `id` — run identifier; auto-generated from SMILES if omitted
 - `copies: int | list[int] = 4` — molecules per unit cell; int for uniform, list for per-component
 - `n_samples: int = 1`
 - `add_hs: bool | list[bool] = True`
-- `output_dir` — if set, writes to disk and returns `list[Crystal]`; path is `<output_dir>/predictions.parquet`
+- `output_dir` — if set, writes to disk and returns the output `Path`; predictions at `<output_dir>/predictions.parquet`
 
-`ClariSampler` constructor: `checkpoint` (hub name `"clari-m/l/h"` or local `.ckpt` path), `device` (default `"auto"`), `use_ema` (default `True`), `use_bf16` (default `True`), `n_steps` (default `50`), `num_gpus` (default `1`). Use `ClariSampler.from_checkpoint(path)` to be explicit about loading a local file.
+`ClariSampler` constructor: `checkpoint` (hub name `"clari-m/l/h"` or local `.ckpt` path), `device` (default `"auto"`), `use_ema` (default `True`), `use_bf16` (default `True`), `n_steps` (default `50`), `compile` (default `False`), `num_gpus` (default `1`). Use `ClariSampler.from_checkpoint(path)` to be explicit about loading a local file.
+
+## Ranking and export from Python
+
+```python
+from clari.inference import rank, export_cifs
+
+# Rank by UMA energy — requires a path; does not work on in-memory Crystal lists
+rank("results/ethanol")
+
+# Export from disk
+export_cifs("results/ethanol")
+export_cifs("results/ethanol", top_k=3)           # top 3 ranked (requires rankings.csv)
+export_cifs("results/ethanol", sample_idx=[0, 2]) # specific indices
+export_cifs("results/ethanol", output_dir="my_cifs/ethanol")
+
+# Export directly from an in-memory list of Crystal objects
+crystals = sampler.sample("CCO", id="ethanol", n_samples=8)
+export_cifs(crystals, output_dir="my_cifs/", id="ethanol")
+```
 
 ## Output files reference
 
@@ -241,5 +251,5 @@ sampler.sample(
 - With `output_dir`, results are written incrementally as shards and merged at the end; safe to interrupt and re-run with `--overwrite`.
 - Multi-GPU sampling (`num_gpus > 1`) requires `output_dir` and CUDA.
 - OOM is handled automatically: batch size halves and retries until it fits.
-- `--compile` is auto-enabled on CUDA and gives a meaningful speedup after a cold-start compilation.
+- `--compile` is off by default. Pass `--compile` (CLI) or `compile=True` (Python) to enable; gives a meaningful speedup on CUDA after cold-start compilation.
 - `rank` path requires `fairchem-core` (`clari[uma]`); sampling and export do not.

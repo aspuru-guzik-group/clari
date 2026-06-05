@@ -60,13 +60,10 @@ def _make_request(
     add_hs: bool | list[bool],
 ) -> SampleRequest:
     components = _smiles_to_components(smiles, copies)
-    request_id = id or sanitize_id("_".join(f"{s}_x{c}" for s, c in components))
     if len(components) == 1:
         s, c = components[0]
-        return SampleRequest(id=request_id, smiles=s, copies=c, n_samples=n_samples, add_hs=add_hs)
-    return SampleRequest(
-        id=request_id, smiles=components, copies=1, n_samples=n_samples, add_hs=add_hs
-    )
+        return SampleRequest(smiles=s, id=id, copies=c, n_samples=n_samples, add_hs=add_hs)
+    return SampleRequest(smiles=components, id=id, copies=1, n_samples=n_samples, add_hs=add_hs)
 
 
 def resolve_hub_checkpoint(model: str) -> str:

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import multiprocessing as mp
 import shutil
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -551,3 +552,51 @@ def sample(
         overwrite=overwrite,
         pbar=pbar,
     )
+
+
+# ---------------------------------------------------------------------------
+# Demo-only utility — not part of the production API.
+# Returns full diffusion trajectories for visualisation in notebooks.
+# Does not support batching, multi-GPU, or disk output.
+# ---------------------------------------------------------------------------
+
+@dataclass
+class CrystalTrajectory:
+    crystal: Crystal           # final predicted structure
+    trajectory: torch.Tensor  # (steps+1, 3+num_atoms, 3)
+
+
+@torch.inference_mode()
+def sample_trajectory(
+    sampler: ClariSampler,
+    smiles: str | list[str],
+    *,
+    id: str | None = None,
+    copies: int | list[int] = 4,
+    add_hs: bool | list[bool] = True,
+    n_samples: int = 1,
+) -> list[CrystalTrajectory]:
+    """Demo-only: sample crystal structures and return their full diffusion trajectories."""
+    request = _make_request(smiles, id=id, copies=copies, n_samples=n_samples, add_hs=add_hs)
+    template = request_to_crystal(request)
+    batch = Crystal.collate([template]).to(sampler.device)
+
+    results = []
+    for _ in range(n_samples):
+        with torch.autocast(
+            device_type=sampler.device.type,
+            dtype=torch.bfloat16,
+            enabled=sampler.use_bf16,
+        ):
+            traj = sampler.lit.sampler.sample(
+                sampler.lit.interface,
+                sampler.lit.net,
+                batch,
+                return_trajectory=True,
+            )
+        traj = traj.squeeze(1).cpu()
+        results.append(CrystalTrajectory(
+            crystal=template.replace(x=traj[-1]),
+            trajectory=traj,
+        ))
+    return results

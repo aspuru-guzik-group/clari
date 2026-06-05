@@ -65,6 +65,11 @@ def main(argv: list[str] | None = None) -> int:
         use_bf16 = False if args["no_bf16"] else bool(config_options.get("use_bf16", True))
         pbar = False if args["no_pbar"] else bool(config_options.get("pbar", True))
         if config_path and "add_hs" in config_options:
+            if no_add_hs_flags:
+                print(
+                    "Warning: --no_add_hs ignored because add_hs is set in the config file.",
+                    file=sys.stderr,
+                )
             requests = [
                 SampleRequest(
                     id=request.id,

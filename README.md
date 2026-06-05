@@ -187,19 +187,23 @@ sampler.sample(
 
 `sample()` keyword arguments: `id` (auto-generated from SMILES if omitted), `copies` (default 4, int or list of ints for per-component), `n_samples` (default 1), `add_hs` (`bool` or `list[bool]`, default `True`), `output_dir`.
 
-To sample multiple molecules in one batch, pass a list of `SampleRequest` objects. Each request is independent — different molecules, different copy counts, different sample sizes:
+#### 7. Rank and export from Python
 
 ```python
-from clari.inference import ClariSampler, SampleRequest
+from clari.inference import rank, export_cifs
 
-sampler = ClariSampler("clari-m")
-sampler.sample(
-    [
-        SampleRequest(id="ethanol", smiles="CCO", n_samples=4),
-        SampleRequest(id="aspirin_trihydrate", smiles=[("CC(=O)Oc1ccccc1C(=O)O", 1), ("O", 3)], n_samples=4),
-    ],
-    output_dir="results/batch",
-)
+# Rank by UMA energy — writes energies.csv and rankings.csv (requires a path, not in-memory)
+rank("results/ethanol")
+
+# Export from disk
+export_cifs("results/ethanol")
+export_cifs("results/ethanol", top_k=3)           # top 3 ranked (requires rankings.csv)
+export_cifs("results/ethanol", sample_idx=[0, 2]) # specific indices
+export_cifs("results/ethanol", output_dir="my_cifs/ethanol")
+
+# Export directly from an in-memory list of Crystal objects
+crystals = sampler.sample("CCO", id="ethanol", n_samples=8)
+export_cifs(crystals, output_dir="my_cifs/", id="ethanol")
 ```
 
 Agent-facing inference reference: [clari/inference/SKILL.md](clari/inference/SKILL.md).
