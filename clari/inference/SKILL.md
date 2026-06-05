@@ -1,188 +1,245 @@
 ---
 name: clari
-description: Predict organic crystal structures from a molecule using CLARI. Use whenever the user asks to predict, generate, sample, propose, or simulate crystal structures, crystal packings, polymorph candidates, or unit cells for a molecule, SMILES string, or chemical name (e.g. "predict the crystal structure of aspirin", "give me 20 packings of ethanol", "sample crystals for this SMILES", "predict possible polymorphs of paracetamol", "run CSP on this molecule"). Also use for ranking already-generated crystals by FairChem energy, exporting CIF files from an existing CLARI run, or any question about running `uv run sample`, `uv run rank`, or `uv run export-cifs`.
+description: Run CLARI crystal structure inference, batch sampling, ranking, and CIF export. Use for requests to sample crystal candidates from SMILES, run `sample`, `rank`, or `export-cifs`, prepare current-format inference configs, or explain the simplified inference package in `clari/inference/`.
 ---
 
-# CLARI Crystal Structure Prediction
+# CLARI inference
 
-CLARI is a diffusion model that samples organic crystal packings (unit cell + atomic positions) from molecule specifications. A single-component input is a SMILES string. Co-crystals, hydrates, and solvates are represented as lists of `(SMILES, copy_count)` pairs. Use this skill to map natural-language CSP requests onto the CLARI CLI defined in `clari/inference/`.
+CLARI predicts organic crystal structures from molecular SMILES. The workflow has three steps:
 
-## The three-stage workflow
+1. `clari` — samples candidate crystal structures, writes `predictions.parquet`
+2. `rank` — scores each candidate with FairChem UMA energy, writes `rankings.csv`
+3. `export-cifs` — writes `.cif` files to disk from saved samples
 
-Each stage consumes the previous stage's output directory:
+## Package layout
 
-1. **`sample`** — given SMILES, produce N candidate crystals → `<dir>/predictions.parquet`
-2. **`rank`** *(optional)* — score samples with a FairChem UMA energy model → `<dir>/rankings.csv`
-3. **`export-cifs`** *(optional)* — write CIF files to disk → `<dir>/cifs/<id>/...`
+- `clari/inference/core.py` — CLI entrypoint (`clari` command), argument parsing, calls `sample()`
+- `clari/inference/inputs.py` — `SampleRequest` dataclass, `build_request()`, config/CLI parsing, Hub checkpoint resolution
+- `clari/inference/sample.py` — `ClariSampler` class, model loading, OOM-safe batch sampling, shard writing, multi-GPU dispatch
+- `clari/inference/rank.py` — `rank()` wrapper: calls `compute_energies`, joins with predictions, writes `rankings.csv`
+- `clari/inference/export.py` — `export_cifs()`: reads parquet, optionally filters by rank/id/index, writes `.cif` files
 
-Stop at stage 1 if the user just wants candidates. Continue to stage 2 if they say "best", "lowest-energy", "ranked", or "good". Continue to stage 3 if they want CIF files on disk.
+Do not reference deleted modules: `cli.py`, `sampler.py`, `runner.py`, `io.py`.
 
-## What you need from the user
+## Key concepts
 
-In priority order:
+**`--copies` (Z value):** Number of molecules per unit cell. Default is 4, which covers the most common organic packing motifs. Use smaller values (1–2) for large molecules or to explore low-Z polymorphs. For multi-component requests (co-crystals), `copies` is per-component.
 
-1. **A molecule.** Accept an explicit-hydrogen SMILES string, a chemical name, an RDKit mol, or a co-crystal list of `(SMILES, copy_count)` pairs. If they give a name (ethanol, aspirin, paracetamol, urea), convert it to explicit-hydrogen SMILES yourself only for common molecules you are confident about. For unfamiliar or ambiguous names, confirm the SMILES with the user before running. **Never guess a SMILES.**
-2. **A checkpoint or Hub model.** By default, CLARI loads `clari-h` from the Hugging Face Hub if `--checkpoint_path` is omitted. You can pass a local checkpoint path or another Hub model key (`clari-m`, `clari-l`) to `--checkpoint_path`.
-3. **`n_samples`** — how many structures to generate. Use whatever the user said. If they didn't say, default to 100.
-4. **`copies`** — copies of each molecule in the unit cell for single-component inputs. The CLI and Python defaults are 4. For agent-run CSP requests, default to **4** for small organics unless the user specified otherwise. Use 1 only when the molecule is very large (>100 heavy atoms) or the user explicitly asks. For co-crystals, hydrates, and solvates, encode the intended stoichiometry with per-component counts in the `(SMILES, copy_count)` pairs. The counts may differ between components. Ask if uncertain — wrong copy counts produce unphysical results.
-5. **Output directory.** Default to a generated folder name based on the sanitized SMILES and current timestamp. Or specify it manually with `--output_dir`.
+**Hydrogen atoms:** The model was trained on all-hydrogen crystal structures, so H atoms must be present. By default, CLARI calls `Chem.AddHs` on each molecule before building the graph. Pass `--no_add_hs` once per component to disable H addition for that component — the nth flag applies to the nth molecule in order. Always write SMILES without explicit Hs unless you have a specific reason not to.
 
-CLARI expects explicit-hydrogen SMILES. Prefer `C([H])([H])([H])C([H])([H])[H]` over `CC`.
+**`SampleRequest`:** The core data object. Fields:
+- `id: str` — run identifier, used as subdirectory name and row key
+- `smiles: str | list[tuple[str, int]]` — single-component SMILES string, or list of `(smiles, copies)` pairs for co-crystals
+- `copies: int = 4` — molecules per unit cell (single-component only; ignored for co-crystal form)
+- `n_samples: int = 1` — how many candidate structures to generate
+- `add_hs: bool | list[bool] = True` — per-component hydrogen addition flag(s)
 
-## Default sampling command
+## Available models
 
-Always run via `uv` (per project convention):
+| Name | Alias | Notes |
+|------|-------|-------|
+| `clari-m` | `clari-med` | Medium — fastest, good for exploration |
+| `clari-l` | `clari-large` | Large |
+| `clari-h` | `clari-huge` | Huge — highest quality, slowest |
 
-```bash
-uv run sample '<explicit-H SMILES>' --n-samples <N>
-```
+Downloaded automatically from HuggingFace (`the-matter-lab/clari`) on first use. Pass a local `.ckpt` path to use a custom checkpoint.
 
-If specifying a specific checkpoint path (local or hub) and/or output directory manually:
+## CLI — sampling
 
-```bash
-uv run sample '<explicit-H SMILES>' \
-  --checkpoint_path clari-l \
-  --output_dir out/<id> \
-  --n-samples <N>
-```
-
-Useful tweaks:
-
-- `--n-steps 50` — faster sampling, slightly lower quality
-- `--device cpu --compile false --use_bf16 false --n-steps 2 --n-samples 1` — quick CPU smoke test
-- `--batch_size N` — pin batch size if automatic halve-and-retry on OOM still fails
-- `--overwrite` — replace an existing CLARI output folder
-- `--no-filter-clashing` — disable clash filtering (enabled by default)
-- `--no-addHs` — disable adding implicit hydrogens (enabled by default)
-- clashing samples are dropped and the deficit is resampled by default. The resample loop is capped at `--max-resample-factor` × `n_samples` total attempts (default 10).
-
-## Ranking and exporting
-
-When the user asks for "best", "top", "lowest energy", or "ranked" structures:
+### Single molecule
 
 ```bash
-uv run rank out/<id>
-uv run export-cifs out/<id> --top_k <K>
+uv run clari \
+  --smiles "CCO" \
+  --n_samples 8 \
+  --output_dir results/ethanol
 ```
 
-When they want all CIFs without ranking:
+Writes:
+- `results/ethanol/predictions.parquet` — one row per sample: `id`, `sample_idx`, `cif`
+- `results/ethanol/config.json` — full run config for reproducibility
+
+### Multi-component (co-crystal)
+
+Repeated `--smiles` in one CLI call describes one composition, not multiple independent jobs:
 
 ```bash
-uv run export-cifs out/<id>
+uv run clari \
+  --smiles "CC(=O)Oc1ccccc1C(=O)O" \
+  --copies 1 \
+  --smiles "O" \
+  --copies 3 \
+  --n_samples 8 \
+  --output_dir results/aspirin_trihydrate
 ```
 
-For specific samples:
+### Batch via config file
+
+For multiple independent requests, use `--config`:
 
 ```bash
-uv run export-cifs out/<id> --sample_idx 0 --sample_idx 42
+uv run clari --config batch.json
 ```
 
-## Python alternative
-
-Use this in a notebook context, or when the user asks for a Python snippet:
-
-```python
-from clari.inference import ClariSampler, SampleRequest
-
-# from a local checkpoint
-sampler = ClariSampler.from_checkpoint("clari.ckpt")
-
-# or from the Hub (downloads once, then cached; requires internet or a warm cache)
-sampler = ClariSampler.from_hub("Clari-M")  # or "Clari-L"
-
-samples = sampler.sample(
-    SampleRequest(
-        id="ethanol",
-        smiles="C([H])([H])([H])C([H])([H])O[H]",
-        copies=4,
-        n_samples=20,
-    )
-)
-# samples[i] has .crystal, .sample_idx, .id
-# samples[i].crystal.to_cif() gives a CIF string
-```
-
-Passing `output_dir="..."` switches to shard-and-merge: results stream to disk as they're produced and the call returns the `predictions.parquet` path instead of in-memory samples. For multi-GPU Python sampling:
-
-```python
-sampler = ClariSampler.from_checkpoint("clari.ckpt", num_gpus=4)
-predictions_path = sampler.sample(
-    SampleRequest(
-        id="ethanol",
-        smiles="C([H])([H])([H])C([H])([H])O[H]",
-        copies=4,
-        n_samples=20,
-    ),
-    output_dir="out/ethanol",
-)
-```
-
-## Config files
-
-For more than two or three molecules, prefer a JSON or YAML config over long parallel `--smiles`/`--ids`/`--copies`/`--n_samples` flag chains. Every `sample` flag is a key in the file.
-
-```bash
-uv run sample --config jobs.json
-```
-
-CLI flags layered on top of `--config` override the file values. An example co-crystal config lives at `scripts/inference/sample_config.json`.
-
-## Multi-component unit cells
-
-Co-crystals, hydrates, and solvates use lists of `(SMILES, copy_count)` pairs. Prefer config files for CLI runs because repeated `--smiles` flags mean multiple independent requests, not one co-crystal.
-
-Python:
-
-```python
-samples = sampler.sample(
-    SampleRequest(
-        id="ethanol-water",
-        smiles=[
-            ("C([H])([H])([H])C([H])([H])O[H]", 1),
-            ("O([H])[H]", 1),
-        ],
-        n_samples=20,
-    )
-)
-```
-
-Config:
+Config schema:
 
 ```json
 {
-  "checkpoint_path": "clari.ckpt",
-  "output_dir": "out/ethanol-water",
-  "ids": "ethanol-water",
-  "smiles": [
-    ["C([H])([H])([H])C([H])([H])O[H]", 1],
-    ["O([H])[H]", 1]
-  ],
-  "n_samples": 20
+  "checkpoint_path": "clari-m",
+  "output_dir": "results/batch_run",
+  "requests": [
+    {
+      "id": "ethanol",
+      "smiles": "CCO",
+      "copies": 4,
+      "n_samples": 4,
+      "add_hs": true
+    },
+    {
+      "id": "aspirin_trihydrate",
+      "smiles": [
+        ["CC(=O)Oc1ccccc1C(=O)O", 1],
+        ["O", 3]
+      ],
+      "n_samples": 4
+    }
+  ]
 }
 ```
 
-## Common request → command map
+Top-level config keys (all optional, override CLI defaults):
+- `checkpoint_path` — model name or local path
+- `output_dir` — where to write results
+- `use_ema`, `use_bf16`, `pbar` — booleans
+- `add_hs` — global H-addition default for all requests in this config
 
-| User says | What to run |
-|---|---|
-| "predict the crystal structure of X" | `sample` with `n_samples=100` |
-| "give me N structures of X" | `sample` with `n_samples=N` |
-| "sample crystals of X with K copies" | `sample` with `copies=K` |
-| "predict the crystal structure of the X·Y co-crystal" | `sample` from a config with `smiles=[[X_smiles, X_copies], [Y_smiles, Y_copies]]` |
-| "rank the structures in F" | `uv run rank F` |
-| "export top K CIFs from F" | rank (if not yet), then `uv run export-cifs F --top_k K` |
-| "give me 20 structures of ethanol and the top 5 CIFs" | sample 20 → rank → export top 5 |
-| "do a quick CPU test" | sample with the CPU smoke-test flags above |
+Per-request keys: `id`, `smiles`, `copies`, `n_samples`, `add_hs`.
 
-## Sanity checks before running
+### All CLI flags
 
-- The molecule has been resolved to a SMILES you trust.
-- The local checkpoint exists, or the requested Hub model is available from internet/cache.
-- Sampling is a long-running command. For large jobs, run it as a background shell session and report progress instead of blocking the conversation.
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--smiles` | required | SMILES string (repeatable for co-crystal) |
+| `--copies` | 4 | Molecules per unit cell (repeatable, matched by index to `--smiles`) |
+| `--no_add_hs` | off | Disable H addition for nth component (repeatable, matched by index) |
+| `--n_samples` | 1 | Number of candidate structures to generate |
+| `--id` | auto | Labels every row in `predictions.parquet` and becomes the CIF subdirectory name. Auto-generated from SMILES if omitted. Valid characters: letters, digits, `.`, `_`, `-`; others are replaced with `_`. Max 80 chars. |
+| `--config` | — | Path to batch JSON config (mutually exclusive with direct SMILES) |
+| `--checkpoint_path` | `clari-m` | Model name (`clari-m/l/h`) or local `.ckpt` path |
+| `--output_dir` | — | Directory to write results; required for multi-GPU |
+| `--batch_size` | auto | Samples per forward pass; auto-scaled to GPU memory if unset |
+| `--num_gpus` | 1 | Number of GPUs (requires `--output_dir`) |
+| `--device` | auto | `cuda`, `mps`, `cpu`, or `cuda:N` |
+| `--n_steps` | 50 | Flow matching steps |
+| `--torch_threads` | 1 | CPU thread count |
+| `--compile` | auto | `torch.compile` (auto-enabled on CUDA) |
+| `--overwrite` | off | Overwrite existing output directory |
+| `--no_ema` | off | Use raw weights instead of EMA weights |
+| `--no_bf16` | off | Disable bfloat16 (CUDA only) |
+| `--no_pbar` | off | Suppress progress bar |
 
-## Reference files
+## CLI — ranking
 
-- User docs: `clari/inference/README.md`
-- CLI: `clari/inference/cli.py`, `clari/inference/rank.py`, `clari/inference/export.py`
-- Python API: `clari/inference/sampler.py` (`ClariSampler`, `SampleRequest`, `CrystalSample`)
-- Example shell scripts: `scripts/inference/`
+Requires `fairchem-core`. Install with `pip install "clari-csp[uma]"` or `uv sync --extra uma`.
+
+```bash
+uv run rank results/ethanol
+```
+
+Writes:
+- `results/ethanol/energies.csv` — `sample_idx`, `energies` (UMA energy per structure)
+- `results/ethanol/rankings.csv` — `sample_idx`, `id`, `energies`, `rank` (0-based rank within each `id` group)
+
+Flags: `--batch_size 32`, `--num_gpus 1`, `--torch_threads 1`, `--overwrite`.
+
+## CLI — export
+
+```bash
+# All samples
+uv run export-cifs results/ethanol
+
+# Top 3 ranked (requires rankings.csv)
+uv run export-cifs results/ethanol --top_k 3
+
+# Specific sample indices
+uv run export-cifs results/ethanol --sample_idx 0 --sample_idx 2
+
+# Filter by request id
+uv run export-cifs results/ethanol --ids ethanol
+
+# Custom output directory
+uv run export-cifs results/ethanol --output_dir my_cifs/
+```
+
+`export-cifs` works with or without `rankings.csv`. Without it, all samples are exported and named by index. With it, filenames include the rank and `--top_k` filtering becomes available.
+
+Writes CIFs to `<output_dir>/<id>/`:
+- Without rankings: `sample_000000.cif`
+- With rankings: `rank_0000_sample_000000.cif`
+
+Flags: `--output_dir`, `--rankings_path`, `--top_k`, `--ids` (repeatable), `--sample_idx` (repeatable), `--overwrite`.
+
+## Python API
+
+```python
+from clari.inference import ClariSampler
+
+sampler = ClariSampler("clari-m")
+
+# Single molecule — in-memory
+crystals = sampler.sample("CCO", id="ethanol", n_samples=8)
+
+# Single molecule — disk-backed
+sampler.sample("CCO", id="ethanol", n_samples=8, output_dir="results/ethanol")
+
+# Co-crystal: dot-separated SMILES, uniform copies (2 ethanols + 2 waters)
+sampler.sample("CCO.O", id="ethanol_hydrate", copies=2, n_samples=4)
+
+# Co-crystal: list of SMILES, per-component copies
+sampler.sample(
+    ["CC(=O)Oc1ccccc1C(=O)O", "O"],
+    id="aspirin_trihydrate",
+    copies=[1, 3],
+    n_samples=4,
+    output_dir="results/aspirin_trihydrate",
+)
+
+# Batch — pass list[SampleRequest]
+from clari.inference import SampleRequest
+sampler.sample(
+    [
+        SampleRequest(id="ethanol", smiles="CCO", n_samples=4),
+        SampleRequest(id="aspirin_trihydrate", smiles=[("CC(=O)Oc1ccccc1C(=O)O", 1), ("O", 3)], n_samples=4),
+    ],
+    output_dir="results/batch",
+)
+```
+
+`sample()` keyword arguments (used when first arg is a SMILES string or list of strings):
+- `id` — run identifier; auto-generated from SMILES if omitted
+- `copies: int | list[int] = 4` — molecules per unit cell; int for uniform, list for per-component
+- `n_samples: int = 1`
+- `add_hs: bool | list[bool] = True`
+- `output_dir` — if set, writes to disk and returns `list[Crystal]`; path is `<output_dir>/predictions.parquet`
+
+`ClariSampler` constructor: `checkpoint` (hub name `"clari-m/l/h"` or local `.ckpt` path), `device` (default `"auto"`), `use_ema` (default `True`), `use_bf16` (default `True`), `n_steps` (default `50`), `num_gpus` (default `1`). Use `ClariSampler.from_checkpoint(path)` to be explicit about loading a local file.
+
+## Output files reference
+
+| File | Written by | Contents |
+|------|-----------|---------|
+| `predictions.parquet` | `clari` | `id`, `sample_idx`, `cif` |
+| `config.json` | `clari` | Full run config for reproducibility |
+| `energies.csv` | `rank` | `sample_idx`, `energies` |
+| `rankings.csv` | `rank` | `sample_idx`, `id`, `energies`, `rank` (0-based within id group) |
+| `cifs/<id>/` | `export-cifs` | `.cif` files, named by rank and/or sample index |
+
+## Operational notes
+
+- Use `uv run` from the source checkout, or install the package and call the entry points directly.
+- Without `output_dir`, `sample()` holds everything in memory and returns `list[Crystal]`.
+- With `output_dir`, results are written incrementally as shards and merged at the end; safe to interrupt and re-run with `--overwrite`.
+- Multi-GPU sampling (`num_gpus > 1`) requires `output_dir` and CUDA.
+- OOM is handled automatically: batch size halves and retries until it fits.
+- `--compile` is auto-enabled on CUDA and gives a meaningful speedup after a cold-start compilation.
+- `rank` path requires `fairchem-core` (`clari[uma]`); sampling and export do not.

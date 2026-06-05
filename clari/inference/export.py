@@ -4,10 +4,10 @@ import re
 import shutil
 from pathlib import Path
 
-import jsonargparse
 import polars as pl
+from jsonargparse import ArgumentParser
 
-from clari.inference.io import resolve_predictions_path
+from clari.inference.inputs import resolve_predictions_path
 
 SAMPLE_IDX_COLUMN = "sample_idx"
 ID_COLUMN = "id"
@@ -97,7 +97,7 @@ def _safe_path_part(value: str) -> str:
 
 
 def main() -> None:
-    parser = jsonargparse.ArgumentParser(
+    parser = ArgumentParser(
         description="Export CIF files from CLARI predictions.parquet, optionally using rankings.csv."
     )
     parser.add_argument("input_path", type=Path)
@@ -106,7 +106,7 @@ def main() -> None:
     parser.add_argument("--top_k", type=int, default=None)
     parser.add_argument("--ids", action="append", default=None)
     parser.add_argument("--sample_idx", action="append", default=None)
-    parser.add_argument("--overwrite", type=bool, default=False)
+    parser.add_argument("--overwrite", action="store_true")
     args = parser.parse_args()
     if args.sample_idx is not None:
         args.sample_idx = [int(value) for value in args.sample_idx]

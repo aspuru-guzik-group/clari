@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import jsonargparse
 import polars as pl
+from jsonargparse import ArgumentParser
 
-from clari.inference.io import resolve_predictions_path
+from clari.inference.inputs import resolve_predictions_path
 
 SAMPLE_IDX_COLUMN = "sample_idx"
 ENERGIES_CSV_COLUMN = "energies"
@@ -55,14 +55,12 @@ def rank(
 
 
 def main() -> None:
-    parser = jsonargparse.ArgumentParser(
-        description="Rank generated predictions using FairChem UMA energies."
-    )
+    parser = ArgumentParser(description="Rank generated predictions using FairChem UMA energies.")
     parser.add_argument("input_path", type=Path)
     parser.add_argument("--batch_size", type=int, default=32)
     parser.add_argument("--num_gpus", type=int, default=1)
     parser.add_argument("--torch_threads", type=int, default=1)
-    parser.add_argument("--overwrite", type=bool, default=False)
+    parser.add_argument("--overwrite", action="store_true")
     args = parser.parse_args()
     rank(**vars(args))
 

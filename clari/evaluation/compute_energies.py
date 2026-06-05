@@ -2,15 +2,10 @@ from __future__ import annotations
 
 import argparse
 import multiprocessing as mp
-import os
 import warnings
 from pathlib import Path
 
 warnings.filterwarnings("ignore")
-
-from clari.paths import DATA_DIR
-
-os.environ.setdefault("FAIRCHEM_CACHE_DIR", str(DATA_DIR / "checkpoints" / "fairchem"))
 
 import polars as pl
 import torch

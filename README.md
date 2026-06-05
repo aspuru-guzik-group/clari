@@ -19,149 +19,197 @@ This repository contains code to reproduce the paper: Fast Organic Crystal Struc
 
 ## Installation
 
-To install only the required packages for CLARI to run inference:
+Using pip:
 
 ```bash
-pip install clari-csp
+pip install clari
+```
+
+Or by cloning this repository and running:
+
+```bash
+uv sync
 ```
 
 ## Usage
 
-### 🚀 Quickstart (CLI)
+### Sampling tutorial
+
+The main inference workflow is:
+
+1. `clari` — samples candidate crystal structures, writes `predictions.parquet`
+2. `rank` — scores candidates with FairChem UMA, writes `rankings.csv`
+3. `export-cifs` — writes `.cif` files to disk
+
+Available models: `clari-m`, `clari-l`, `clari-h`. Models are downloaded automatically from HuggingFace on first use.
+
+**`--copies`** is the number of molecules per unit cell (crystallographic Z value). The default is 4, which covers the most common organic packing motifs.
+
+**Hydrogen atoms** are added automatically. Write SMILES without explicit Hs. Pass `--no_add_hs` once per component to disable H addition for that component — the nth flag applies to the nth molecule in order. The model was trained on all-hydrogen structures, so H atoms should almost always be present.
+
+#### 1. Sample one molecule
 
 ```bash
-# Generate 10 crystal structure samples for Ethanol (CCO)
-clari --smiles "CCO" --n-samples 10
+uv run clari \
+  --smiles "CCO" \
+  --id ethanol \
+  --n_samples 8 \
+  --output_dir results/ethanol
 ```
 
-This will work
-```
-clari "CCO.O.O"
-```
-but you may see more consistent results if you specify the number of copies of each component:
-```
-clari "CCO" 1 "O" 2
+Writes:
+- `results/ethanol/predictions.parquet` — one row per sample: `id`, `sample_idx`, `cif`
+- `results/ethanol/config.json` — full run config
+
+In simple terms: generate 8 crystal packings for ethanol and save the run.
+
+**`--id`** labels every row in `predictions.parquet` and becomes the subdirectory name when exporting CIFs (e.g. `cifs/ethanol/sample_000000.cif`). If omitted, an id is auto-generated from the SMILES string. Valid characters are letters, digits, `.`, `_`, and `-`; anything else is replaced with `_`. Max 80 characters.
+
+#### 2. Sample a co-crystal
+
+Repeating `--smiles` in one call describes one multi-component composition, not multiple jobs:
+
+```bash
+uv run clari \
+  --smiles "CC(=O)Oc1ccccc1C(=O)O" \
+  --copies 1 \
+  --smiles "O" \
+  --copies 3 \
+  --n_samples 8 \
+  --output_dir results/aspirin_trihydrate
 ```
 
-other examples
-```
-clari "CC(=O)Oc1ccccc1C(=O)O.O.O.O" --samples 10
-```
+In simple terms: sample one crystal made of one aspirin and three water molecules per unit cell.
 
-these should all be equivalent:
-```
-clari "CC(=O)Oc1ccccc1C(=O)O"
-clari "CC(=O)Oc1ccccc1C(=O)O" 4
-clari --smiles "CC(=O)Oc1ccccc1C(=O)O"
-clari --smiles "CC(=O)Oc1ccccc1C(=O)O" --copies 4
-clari --smiles "CC(=O)Oc1ccccc1C(=O)O" --copies 4 --samples 1
-```
+#### 3. Sample a batch from config
 
-automatically AddHs
+For multiple independent requests, use `--config` with a JSON file:
 
-these should all be equivalent:
-```
-clari "CC(=O)Oc1ccccc1C(=O)O" 4 "O" 4 --samples 10
-clari "CC(=O)Oc1ccccc1C(=O)O.O" --samples 10
-```
-and these are similar but subtly different:
-```
-clari --smiles "CC(=O)Oc1ccccc1C(=O)O.O" --copies 4 --samples 10
-clari "CC(=O)Oc1ccccc1C(=O)O.O" 2 "CC(=O)Oc1ccccc1C(=O)O.O" 2 --samples 10
-```
-
-
-these should be equivalent:
-```
-clari "CC(=O)Oc1ccccc1C(=O)O" 1 "O" 3
-clari --smiles "CC(=O)Oc1ccccc1C(=O)O" --copies 1 --smiles "O" --copies 3
-```
-and these are similar but subtly different:
-```
-clari "CC(=O)Oc1ccccc1C(=O)O.O.O.O" 1
-clari "CC(=O)Oc1ccccc1C(=O)O" 1 "O" 1 "O" 1 "O" 1
+```json
+{
+  "checkpoint_path": "clari-m",
+  "output_dir": "results/batch_run",
+  "requests": [
+    {
+      "id": "ethanol",
+      "smiles": "CCO",
+      "copies": 4,
+      "n_samples": 4
+    },
+    {
+      "id": "aspirin_trihydrate",
+      "smiles": [
+        ["CC(=O)Oc1ccccc1C(=O)O", 1],
+        ["O", 3]
+      ],
+      "n_samples": 4
+    }
+  ]
+}
 ```
 
-
-```
-clari "Cc1cc(sc1C#N)Nc2ccccc2[N+](=O)"
-
-default:
-copies = 4
-samples = 1
-
-
-clari --smiles "Cc1cc(sc1C#N)Nc2ccccc2[N+](=O)"
-
-clari --smiles "Cc1cc(sc1C#N)Nc2ccccc2[N+](=O)" --copies 2 --smiles "O" --copies 4 --samples 10
-
-clari --smiles "Cc1cc(sc1C#N)Nc2ccccc2[N+](=O)" --copies 2 --smiles "O" --copies 4 --samples 1000
-
-clari --smiles "Cc1cc(sc1C#N)Nc2ccccc2[N+](=O)" --smiles "O"
-4 copies of Cc1cc(sc1C#N)Nc2ccccc2[N+](=O)
-4 copies of O
-1 sample
+```bash
+uv run clari --config batch.json
 ```
 
-```
-clari --smiles "[CH]12=[CH]3[CH]4=[CH]5[CH]1[Fe]23456789[CH]%10=[CH]6[CH]7=[CH]8[CH]%109" --copies 2
-clari "[CH]12=[CH]3[CH]4=[CH]5[CH]1[Fe]23456789[CH]%10=[CH]6[CH]7=[CH]8[CH]%109" 2
+Top-level config keys (all optional): `checkpoint_path`, `output_dir`, `use_ema`, `use_bf16`, `pbar`, `add_hs` (global H-addition default for all requests).
+
+Per-request keys: `id`, `smiles`, `copies`, `n_samples`, `add_hs`.
+
+#### 4. Rank samples
+
+Ranking requires `fairchem-core`:
+
+```bash
+pip install "clari[uma]"
+# or from source:
+uv sync --extra uma
 ```
 
-### 🐍 Quickstart (Python API)
+```bash
+uv run rank results/ethanol
+```
 
-You can also run crystal structure sampling directly inside Python:
+Writes:
+- `results/ethanol/energies.csv` — `sample_idx`, `energies` (UMA energy per structure)
+- `results/ethanol/rankings.csv` — `sample_idx`, `id`, `energies`, `rank` (0-based within each `id` group)
+
+#### 5. Export CIF files
+
+```bash
+# All samples
+uv run export-cifs results/ethanol
+
+# Top 3 ranked (requires rankings.csv)
+uv run export-cifs results/ethanol --top_k 3
+
+# Specific sample indices
+uv run export-cifs results/ethanol --sample_idx 0 --sample_idx 2
+
+# Filter by request id
+uv run export-cifs results/ethanol --ids ethanol
+
+# Custom output directory
+uv run export-cifs results/ethanol --output_dir my_cifs/
+```
+
+`export-cifs` works with or without `rankings.csv`. Without it, all samples are exported and named by index. With it, filenames include the rank and `--top_k` filtering becomes available.
+
+CIF filenames:
+- Without rankings: `<id>/sample_000000.cif`
+- With rankings: `<id>/rank_0000_sample_000000.cif`
+
+#### 6. Python API
 
 ```python
-from clari.inference.cli import sample
+from clari.inference import ClariSampler
 
-# Predict 10 crystal structures for a SMILES string
-samples = sample(
-    smiles="CCO",
-    n_samples=10,
-    checkpoint_path="clari-h",  # Downloads automatically if not cached locally
+sampler = ClariSampler("clari-m")
+
+# Single molecule — in-memory
+crystals = sampler.sample("CCO", id="ethanol", n_samples=8)
+
+# Single molecule — disk-backed
+sampler.sample("CCO", id="ethanol", n_samples=8, output_dir="results/ethanol")
+
+# Co-crystal: dot-separated SMILES, uniform copies (2 ethanols + 2 waters per cell)
+sampler.sample("CCO.O", id="ethanol_hydrate", copies=2, n_samples=4)
+
+# Co-crystal: list of SMILES, per-component copies (1 aspirin + 3 waters per cell)
+sampler.sample(
+    ["CC(=O)Oc1ccccc1C(=O)O", "O"],
+    id="aspirin_trihydrate",
+    copies=[1, 3],
+    n_samples=4,
+    output_dir="results/aspirin_trihydrate",
 )
-
-# Export the first generated crystal structure to a CIF file
-first_sample = samples[0]
-print(first_sample.crystal.to_cif())
 ```
 
-### Advanced Usage
+`sample()` keyword arguments: `id` (auto-generated from SMILES if omitted), `copies` (default 4, int or list of ints for per-component), `n_samples` (default 1), `add_hs` (`bool` or `list[bool]`, default `True`), `output_dir`.
 
-After installing CLARI in an activated environment, you can use the other command-line tools directly:
+To sample multiple molecules in one batch, pass a list of `SampleRequest` objects. Each request is independent — different molecules, different copy counts, different sample sizes:
 
-```bash
-sample --help
-sample-test --help
-rank --help
-export-cifs --help
-summarize --help
-skill
+```python
+from clari.inference import ClariSampler, SampleRequest
+
+sampler = ClariSampler("clari-m")
+sampler.sample(
+    [
+        SampleRequest(id="ethanol", smiles="CCO", n_samples=4),
+        SampleRequest(id="aspirin_trihydrate", smiles=[("CC(=O)Oc1ccccc1C(=O)O", 1), ("O", 3)], n_samples=4),
+    ],
+    output_dir="results/batch",
+)
 ```
 
-When working from a source checkout with `uv sync`, prefix commands with `uv run`, for example:
-
-```bash
-uv run train --help
-```
-
-Checkpoints for Clari-M and Clari-L are uploaded to [HuggingFace](https://huggingface.co/the-matter-lab/clari).
-To run inference, see the [README.md](clari/inference/README.md) in `clari.inference`.
-We also include a [SKILL.md](clari/inference/SKILL.md) so that coding agents can run inference; installed environments can print it with `skill` (`uv run skill`).
+Agent-facing inference reference: [clari/inference/SKILL.md](clari/inference/SKILL.md).
 
 ## Development Installation
 
-To install all dependencies needed for development (in editable mode):
+To install the full development environment:
 
 ```bash
-pip install -e ".[dev]"
-```
-
-Or using `uv` to sync the full development environment:
-
-```bash
-uv sync
+uv sync --extra dev
 ```
 
 ⚠️ To generate data and run COMPACK, we require the **CCDC SDK**, whose dependencies conflict with FairChem. Thus, some scripts run as standalone uv scripts that resolve their own isolated environments from the CCDC index. The first invocation of `uv run -s *.py ...` resolves and caches that environment. You will still need a valid CCDC license configured on the machine.

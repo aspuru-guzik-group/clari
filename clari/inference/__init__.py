@@ -1,7 +1,2 @@
-from clari.inference.sampler import (
-    ClariSampler,
-    CrystalSample,
-    HubModel,
-    SampleRequest,
-    make_requests,
-)
+from clari.inference.sample import ClariSampler
+from clari.inference.inputs import SampleRequest

@@ -20,7 +20,7 @@ from tqdm import tqdm
 
 from clari.csd import AVAILABLE_CSD_SUBSETS, csd_fam
 from clari.datamodules import CrystalDataModule
-from clari.inference.sampler import resolve_hub_checkpoint
+from clari.inference.core import resolve_hub_checkpoint
 from clari.paths import RESULTS_DIR
 from clari.pipelines.base.lit import LitDiT
 

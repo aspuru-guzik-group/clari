@@ -33,13 +33,16 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+uma = [
+    "fairchem-core>=2.19.0; python_version >= '3.11'",
+]
 dev = [
+    "pytest>=8.4.0",
     "posebusters>=0.6.5",
     "p-tqdm",
     "multiprocess",
     "stopit",
     "wandb==0.26",
-    "fairchem-core>=2.19.0; python_version >= '3.11'",
     "seaborn>=0.13.2",
     "matplotlib",
     "triton; sys_platform == 'linux'",
@@ -59,8 +62,7 @@ train = "clari.pipelines.base.train:main"
 collision = "clari.evaluation.collision:main"
 compute-energies = "clari.evaluation.compute_energies:cli"
 sample-test = "clari.evaluation.sample:cli"
-sample = "clari.inference.cli:main"
-clari = "clari.inference.cli:main"
+clari = "clari.inference.core:main"
 rank = "clari.inference.rank:main"
 export-cifs = "clari.inference.export:main"
 summarize = "clari.evaluation.summarize:main"
@@ -80,3 +82,8 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
+]

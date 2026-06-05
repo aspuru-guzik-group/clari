@@ -33,7 +33,6 @@ gemmi.set_leak_warnings(False)
 
 @dataclasses.dataclass(frozen=True)
 class Crystal:
-
     x: Tensor  # (* 3+N 3) (0.5*abc coords)
 
     # Sequence
@@ -437,13 +436,16 @@ class Crystal:
         smiles: list[tuple[str, int]],
         *,
         csd_id: str = "smiles",
-        add_hs: bool = False,
+        add_hs: bool | list[bool] = False,
     ) -> Self:
         from pathlib import Path
+
         with silenced_rdlogger():
             mols = []
             for s, c in smiles:
-                if isinstance(s, str) and (s.lower().endswith('.mol') or (len(s) < 1024 and Path(s).is_file())):
+                if isinstance(s, str) and (
+                    s.lower().endswith(".mol") or (len(s) < 1024 and Path(s).is_file())
+                ):
                     mol = Chem.MolFromMolFile(s, sanitize=False)
                 elif isinstance(s, str) and ("M  END" in s or "V2000" in s or "V3000" in s):
                     mol = Chem.MolFromMolBlock(s, sanitize=False)
@@ -452,10 +454,11 @@ class Crystal:
                 mols.append((mol, c))
         if any(m is None for m, _ in mols):
             raise ValueError(f"Could not parse SMILES or read .mol file: {smiles!r}")
-        if add_hs:
-            for m, _ in mols:
+        add_hs_list = [add_hs] * len(mols) if isinstance(add_hs, bool) else list(add_hs)
+        for flag, (m, _) in zip(add_hs_list, mols):
+            if flag:
                 m.UpdatePropertyCache(strict=False)
-            mols = [(Chem.AddHs(m), c) for m, c in mols]
+        mols = [(Chem.AddHs(m) if flag else m, c) for flag, (m, c) in zip(add_hs_list, mols)]
         return cls.from_rdmol(mols, csd_id=csd_id)
 
     @classmethod
