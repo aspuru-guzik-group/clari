@@ -13,18 +13,16 @@
 
 <br>
 
+This repository contains code to reproduce the paper: Fast Organic Crystal Structure Prediction with Unit Cell Flow Matching ([arXiv](https://arxiv.org/abs/2606.03199)).
+
 ---
 
 ## Installation
 
-```bash
-pip install clari
-```
-
-Or from source:
+To install only the required packages for CLARI to run inference:
 
 ```bash
-uv sync
+pip install clari-csp
 ```
 
 ## Inference
@@ -76,14 +74,15 @@ uv run clari --config batch.json
     {
       "id": "aspirin_trihydrate",
       "smiles": [["CC(=O)Oc1ccccc1C(=O)O", 1], ["O", 3]],
-      "samples": 4
+      "samples": 4,
+      "batch_size": 8
     }
   ]
 }
 ```
 
 Top-level keys (all optional): `checkpoint_path`, `output_dir`, `use_ema`, `use_bf16`, `pbar`, `add_hs`.
-Per-request keys: `id`, `smiles`, `copies`, `samples`, `add_hs`.
+Per-request keys: `id`, `smiles`, `copies`, `samples`, `add_hs`, `batch_size`.
 
 ### Rank
 
@@ -147,17 +146,27 @@ export_cifs(crystals, output_dir="my_cifs/", id="ethanol")
 
 See also: [inference reference](clari/inference/SKILL.md).
 
-## Development
+## Development Installation
+
+To install all dependencies needed for development (in editable mode):
 
 ```bash
-uv sync --group dev
+pip install -e ".[dev]"
 ```
 
-⚠️ Data generation and COMPACK require the **CCDC SDK**, which conflicts with FairChem. Those scripts run as standalone `uv -s` scripts with their own isolated environments. A valid CCDC license must be configured on the machine.
+Or using `uv` to sync the full development environment:
+
+```bash
+uv sync
+```
+
+⚠️ To generate data and run COMPACK, we require the **CCDC SDK**, whose dependencies conflict with FairChem. Thus, some scripts run as standalone uv scripts that resolve their own isolated environments from the CCDC index. The first invocation of `uv run -s *.py ...` resolves and caches that environment. You will still need a valid CCDC license configured on the machine.
 
 ## Data
 
-Expected layout:
+### Generation
+
+We expect the final data folder to be structured as follows:
 
 ```
 data/
@@ -166,37 +175,62 @@ data/
         csd_conquest.parquet
     csd/
         config.json
-        metadata.parquet
+        metdata.parquet
         {train,val,test}.pt
 ```
 
-```bash
-uv run -s scripts/data/0_metadata.py                          # extract CSD metadata
-# download CSD via ConQuest into csd_conquest.parquet
-uv run python -m scripts.data.1_process --num_workers=16      # build data/csd/
+To generate the data, first extract the metadata of entries in CSD:
+
+```
+uv run -s scripts/data/0_metadata.py
 ```
 
-CSD refcodes and dataset splits are on [HuggingFace](https://huggingface.co/the-matter-lab/clari).
+This creates the `csd_metadata.parquet` file from above. Next, download **ALL** of CSD in `.mol2` and `.cif` format using ConQuest (not `csd-python-api` since it sanitizes molecules and removes some bond information) into the `csd_conquest.parquet` file. Finally, generate the `data/csd` folder with:
+
+```
+uv run python -m scripts.data.1_process --num_workers=16
+```
+
+For reference, the CSD refcodes we use and our dataset split are uploaded to [HuggingFace](https://huggingface.co/the-matter-lab/clari).
 
 ## Evaluation
 
-Paths default to `data/`, `results/`, `logs/` under the working directory. Override with `CLARI_DATA_DIR`, `CLARI_RESULTS_DIR`, `CLARI_LOG_DIR` (see [`clari/paths.py`](clari/paths.py)).
+Training and evaluation paths default to `data/`, `results/`, and `logs/` under the current working directory. Override them with `CLARI_DATA_DIR`, `CLARI_RESULTS_DIR`, and `CLARI_LOG_DIR`; see [`clari/paths.py`](clari/paths.py).
+
+### OXtal and Teaching Test Sets
+
+To reproduce the paper numbers for a Hub model or local checkpoint, run the stages below in order. Each stage writes into the same `<experiment_dir>` and reads what the previous stage produced.
+
+These evaluation commands require the prepared `data/csd` directory described above. When running CLARI from an installed package, run the commands from a working directory containing `data/csd`, or set `CLARI_DATA_DIR=/path/to/data`.
 
 ```bash
-uv run python clari/evaluation/build_test_cifs_cache.py          # one-time GT CIF cache
+# 0. One-time: build the GT CIF cache the standalone compack script reads
+uv run python clari/evaluation/build_test_cifs_cache.py
 
+# 1. Sample the CSD test set, creates a folder results/experiment_dir.
+#    Use clari-m, clari-l, or a local checkpoint path as the first argument.
 uv run sample-test clari-m <num_samples> <experiment_dir> --subset <teaching/oxtal>
 
-uv run collision <experiment_dir>                                 # writes collision.csv
+# 2. Clash check (writes collision.csv)
+uv run collision <experiment_dir>
 
-uv run compute-energies <experiment_dir>                          # writes energies.csv
+# 3. UMA energies (writes energies.csv)
+uv run compute-energies <experiment_dir>
 
-uv run -s clari/evaluation/compack.py <experiment_dir> --num_processes <n> # writes compack.csv
+# 4. COMPACK packing similarity (writes compack.csv, isolated uv script env)
+uv run -s clari/evaluation/compack.py <experiment_dir> --num_processes n
 
-uv run summarize <experiment_dir>                                 # SolC per subset
+# 5. Summary table (SolC per subset, all k)
+uv run summarize <experiment_dir>
 ```
 
-Ablation metrics: `from clari.pipelines.utils.metrics import assess_crystals_eval`. Training scripts are in `scripts/train/`.
+### Ablations
+
+The exact commands used for to train our ablated and final models can be found in `scripts/train`. After running inference as above, the metrics used for ablations are defined in:
+
+```
+from clari.pipelines.utils.metrics import assess_crystals_eval
+```
 
 ## Citation
 
