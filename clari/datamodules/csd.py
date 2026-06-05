@@ -198,7 +198,6 @@ class CrystalDataModule(L.LightningDataModule):
         g = torch.Generator()
         g.manual_seed(self.seed)
 
-        # TODO: a bit inefficient to load everything, should move to setup()
         for k in ["train", "val", "test"]:
             pyg_path = self.root / f"{k}.pt"
             if not pyg_path.exists():

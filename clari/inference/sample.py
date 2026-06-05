@@ -23,6 +23,21 @@ from clari.pipelines.base.lit import LitDiT
 H100_REFERENCE_MEMORY_GB = 81.0
 
 
+def _seed_everything(seed: int) -> None:
+    import random
+
+    random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+    try:
+        import numpy as np
+
+        np.random.seed(seed)
+    except ImportError:
+        pass
+
+
 def resolve_device(device: str | torch.device | None) -> torch.device:
     if device is None or str(device) == "auto":
         if torch.cuda.is_available():
@@ -167,6 +182,7 @@ class ClariSampler:
         compile: bool = False,
         torch_threads: int = 1,
         num_gpus: int = 1,
+        seed: int | None = None,
     ):
         if n_steps is not None and n_steps <= 0:
             raise ValueError(f"n_steps must be positive, got {n_steps}")
@@ -192,6 +208,9 @@ class ClariSampler:
         self.compile = compile
         self.torch_threads = torch_threads
         self.num_gpus = num_gpus
+        self.seed = seed
+        if seed is not None:
+            _seed_everything(seed)
 
     @classmethod
     def from_checkpoint(
@@ -205,6 +224,7 @@ class ClariSampler:
         compile: bool = False,
         torch_threads: int = 1,
         num_gpus: int = 1,
+        seed: int | None = None,
     ) -> ClariSampler:
         return cls(
             str(path),
@@ -215,6 +235,7 @@ class ClariSampler:
             compile=compile,
             torch_threads=torch_threads,
             num_gpus=num_gpus,
+            seed=seed,
         )
 
     @torch.inference_mode()
@@ -291,6 +312,7 @@ class ClariSampler:
         num_gpus: int | None = None,
         overwrite: bool = False,
         pbar: bool = True,
+        seed: int | None = None,
     ) -> list[Crystal] | Path:
         if isinstance(smiles, SampleRequest):
             requests = [smiles]
@@ -301,6 +323,8 @@ class ClariSampler:
         num_gpus = self.num_gpus if num_gpus is None else num_gpus
         if output_dir is None and num_gpus > 1:
             raise ValueError("num_gpus > 1 requires output_dir.")
+        if seed is not None:
+            _seed_everything(seed)
         if output_dir is None:
             progress = (
                 tqdm(
@@ -329,6 +353,7 @@ class ClariSampler:
             num_gpus=num_gpus,
             overwrite=overwrite,
             pbar=pbar,
+            seed=seed,
         )
 
 
@@ -426,6 +451,7 @@ def gpu_worker(
     compile: bool | None,
     torch_threads: int,
     error_queue: mp.queues.Queue,
+    seed: int | None,
 ) -> None:
     import sys
     import traceback
@@ -441,6 +467,7 @@ def gpu_worker(
             compile=compile,
             torch_threads=torch_threads,
             num_gpus=1,
+            seed=None if seed is None else seed + rank,
         )
         run_chunks(sampler, requests, chunks, Path(shards_dir), pbar=False)
     except Exception:
@@ -457,6 +484,7 @@ def sample_to_directory(
     num_gpus: int,
     overwrite: bool,
     pbar: bool,
+    seed: int | None = None,
 ) -> Path:
     if num_gpus <= 0:
         raise ValueError(f"num_gpus must be positive, got {num_gpus}")
@@ -484,7 +512,7 @@ def sample_to_directory(
     )
     chunks = build_chunks(requests, batch_size, sampler.device)
     shards_dir = output_dir / ".shards"
-    shards_dir.mkdir()
+    shards_dir.mkdir(exist_ok=True)
     if num_gpus == 1:
         run_chunks(sampler, requests, chunks, shards_dir, pbar=pbar)
     else:
@@ -510,6 +538,7 @@ def sample_to_directory(
                     sampler.compile,
                     sampler.torch_threads,
                     error_queue,
+                    seed,
                 ),
             )
             proc.start()
@@ -545,6 +574,7 @@ def sample(
     torch_threads: int = 1,
     overwrite: bool = False,
     pbar: bool = True,
+    seed: int | None = None,
 ) -> list[Crystal] | Path:
     sampler = ClariSampler(
         checkpoint_path,
@@ -555,6 +585,7 @@ def sample(
         compile=compile,
         torch_threads=torch_threads,
         num_gpus=num_gpus,
+        seed=seed,
     )
     return sampler.sample(
         requests,
@@ -563,6 +594,7 @@ def sample(
         num_gpus=num_gpus,
         overwrite=overwrite,
         pbar=pbar,
+        seed=seed,
     )
 
 

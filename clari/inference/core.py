@@ -28,6 +28,7 @@ def build_parser() -> ArgumentParser:
     parser.add_argument("--device", type=str, default="auto")
     parser.add_argument("--n_steps", type=int, default=50)
     parser.add_argument("--torch_threads", type=int, default=1)
+    parser.add_argument("--seed", type=int, default=None)
     parser.add_argument("--compile", action="store_true")
     parser.add_argument("--overwrite", action="store_true")
     parser.add_argument("--no_ema", action="store_true")
@@ -74,6 +75,7 @@ def main(argv: list[str] | None = None) -> int:
             torch_threads=args["torch_threads"],
             overwrite=args["overwrite"],
             pbar=pbar,
+            seed=args["seed"],
         )
     except Exception as exc:
         print(f"Error: {exc}", file=sys.stderr)
