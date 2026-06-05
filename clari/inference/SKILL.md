@@ -82,7 +82,7 @@ Config schema:
 
 ```json
 {
-  "checkpoint_path": "clari-m",
+  "model": "clari-m",
   "output_dir": "results/batch_run",
   "requests": [
     {
@@ -104,7 +104,7 @@ Config schema:
 ```
 
 Top-level config keys (all optional, override CLI defaults):
-- `checkpoint_path` — model name or local path
+- `model` — model name (`clari-m`, `clari-l`, `clari-h`)
 - `output_dir` — where to write results
 - `use_ema`, `use_bf16`, `pbar` — booleans
 Per-request keys: `id`, `smiles`, `copies`, `samples`, `batch_size`.
@@ -118,7 +118,7 @@ Per-request keys: `id`, `smiles`, `copies`, `samples`, `batch_size`.
 | `--samples` | 1 | Number of candidate structures to generate |
 | `--id` | auto | Labels every row in `predictions.parquet` and becomes the CIF subdirectory name. Auto-generated from SMILES if omitted. Valid characters: letters, digits, `.`, `_`, `-`; others are replaced with `_`. Max 80 chars. |
 | `--config` | — | Path to batch JSON config (mutually exclusive with direct SMILES) |
-| `--checkpoint_path` | `clari-m` | Model name (`clari-m/l/h`) or local `.ckpt` path |
+| `--model` | `clari-m` | Model name (`clari-m`, `clari-l`, `clari-h`) |
 | `--output_dir` | — | Directory to write results; required for multi-GPU |
 | `--batch_size` | auto | Samples per forward pass; auto-scaled to GPU memory if unset |
 | `--num_gpus` | 1 | Number of GPUs (requires `--output_dir`) |
@@ -205,7 +205,7 @@ sampler.sample(
 - `samples: int = 1`
 - `output_dir` — if set, writes to disk and returns the output `Path`; predictions at `<output_dir>/predictions.parquet`
 
-`ClariSampler` constructor: `checkpoint` (hub name `"clari-m/l/h"` or local `.ckpt` path), `device` (default `"auto"`), `use_ema` (default `True`), `use_bf16` (default `True`), `n_steps` (default `50`), `compile` (default `False`), `num_gpus` (default `1`). Use `ClariSampler.from_checkpoint(path)` to be explicit about loading a local file.
+`ClariSampler` constructor: `checkpoint` (`"clari-m"`, `"clari-l"`, or `"clari-h"`), `device` (default `"auto"`), `use_ema` (default `True`), `use_bf16` (default `True`), `n_steps` (default `50`), `compile` (default `False`), `num_gpus` (default `1`).
 
 ## Ranking and export from Python
 

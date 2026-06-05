@@ -44,6 +44,7 @@ Models (`clari-m`, `clari-l`, `clari-h`) download automatically from HuggingFace
 
 ```bash
 uv run clari \
+  --model clari-h \
   --smiles "CCO" \
   --id ethanol \
   --samples 8 \
@@ -72,7 +73,7 @@ uv run clari --config batch.json
 
 ```json
 {
-  "checkpoint_path": "clari-m",
+  "model": "clari-m",
   "output_dir": "results/batch_run",
   "requests": [
     { "id": "ethanol", "smiles": "CCO", "copies": 4, "samples": 4 },
@@ -86,7 +87,7 @@ uv run clari --config batch.json
 }
 ```
 
-Top-level keys (all optional): `checkpoint_path`, `output_dir`, `use_ema`, `use_bf16`, `pbar`.
+Top-level keys (all optional): `model`, `output_dir`, `use_ema`, `use_bf16`, `pbar`.
 Per-request keys: `id`, `smiles`, `copies`, `samples`, `batch_size`.
 
 ### Rank
@@ -206,7 +207,7 @@ Training and evaluation paths default to `data/`, `results/`, and `logs/` under 
 
 ### OXtal and Teaching Test Sets
 
-To reproduce the paper numbers for a Hub model or local checkpoint, run the stages below in order. Each stage writes into the same `<experiment_dir>` and reads what the previous stage produced.
+To reproduce the paper numbers, run the stages below in order. Each stage writes into the same `<experiment_dir>` and reads what the previous stage produced.
 
 These evaluation commands require the prepared `data/csd` directory described above. When running CLARI from an installed package, run the commands from a working directory containing `data/csd`, or set `CLARI_DATA_DIR=/path/to/data`.
 
@@ -215,7 +216,7 @@ These evaluation commands require the prepared `data/csd` directory described ab
 uv run python clari/evaluation/build_test_cifs_cache.py
 
 # 1. Sample the CSD test set, creates a folder results/experiment_dir.
-#    Use clari-m, clari-l, or a local checkpoint path as the first argument.
+#    Use clari-m, clari-l, or clari-h as the first argument.
 uv run sample-test clari-m <num_samples> <experiment_dir> --subset <teaching/oxtal>
 
 # 2. Clash check (writes collision.csv)

@@ -21,7 +21,7 @@ def build_parser() -> ArgumentParser:
     parser.add_argument("--copies", action="append", default=None)
     parser.add_argument("--id", type=str, default=None)
     parser.add_argument("--samples", type=int, default=1)
-    parser.add_argument("--checkpoint_path", type=str, default="clari-m")
+    parser.add_argument("--model", type=str, default="clari-m")
     parser.add_argument("--output_dir", type=str, default=None)
     parser.add_argument("--batch_size", type=int, default=None)
     parser.add_argument("--num_gpus", type=int, default=1)
@@ -63,7 +63,7 @@ def main(argv: list[str] | None = None) -> int:
             raise ValueError("`--output_dir` is required for CLI sampling.")
         result = sample(
             requests,
-            checkpoint_path=args["checkpoint_path"],
+            model=args["model"],
             output_dir=args["output_dir"],
             batch_size=args["batch_size"],
             num_gpus=args["num_gpus"],

@@ -57,7 +57,7 @@ def request_to_crystal(request: SampleRequest) -> Crystal:
 
 def build_run_config(
     requests: list[SampleRequest],
-    checkpoint_path: str,
+    model: str,
     device: str,
     num_gpus: int,
     batch_size: int | None,
@@ -68,7 +68,7 @@ def build_run_config(
     overwrite: bool,
 ) -> dict[str, Any]:
     return {
-        "checkpoint_path": checkpoint_path,
+        "model": model,
         "device": device,
         "num_gpus": num_gpus,
         "batch_size": batch_size,
@@ -137,13 +137,13 @@ def auto_batch_size(n_atoms: int, batch_size: int | None, device: str | torch.de
 
 
 def load_lit(
-    checkpoint_path: str | Path,
+    path: str | Path,
     device: torch.device,
     use_ema: bool,
     n_steps: int | None,
     compile: bool,
 ) -> LitDiT:
-    checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
+    checkpoint = torch.load(path, map_location="cpu", weights_only=False)
     lit = LitDiT(**checkpoint["hyper_parameters"])
     if use_ema:
         ema_weights = (
@@ -201,7 +201,7 @@ class ClariSampler:
         torch.set_float32_matmul_precision("high")
         self.lit = load_lit(checkpoint, resolved_device, use_ema, n_steps, compile)
         self.device = resolved_device
-        self.checkpoint_path = str(checkpoint)
+        self.model = str(checkpoint)
         self.use_ema = use_ema
         self.use_bf16 = use_bf16 and resolved_device.type == "cuda"
         self.n_steps = n_steps
@@ -441,7 +441,7 @@ def run_chunks(
 
 def gpu_worker(
     rank: int,
-    checkpoint_path: str,
+    model: str,
     requests: list[SampleRequest],
     chunks: list[dict[str, int]],
     shards_dir: str,
@@ -459,7 +459,7 @@ def gpu_worker(
     try:
         torch.cuda.set_device(rank)
         sampler = ClariSampler.from_checkpoint(
-            checkpoint_path,
+            model,
             device=f"cuda:{rank}",
             use_ema=use_ema,
             use_bf16=use_bf16,
@@ -496,7 +496,7 @@ def sample_to_directory(
         json.dumps(
             build_run_config(
                 requests,
-                sampler.checkpoint_path,
+                sampler.model,
                 str(sampler.device),
                 num_gpus,
                 batch_size,
@@ -528,7 +528,7 @@ def sample_to_directory(
                 target=gpu_worker,
                 args=(
                     rank,
-                    sampler.checkpoint_path,
+                    sampler.model,
                     requests,
                     chunks[rank::num_gpus],
                     str(shards_dir),
@@ -562,7 +562,7 @@ def sample_to_directory(
 def sample(
     requests: SampleRequest | list[SampleRequest],
     *,
-    checkpoint_path: str = "clari-m",
+    model: str = "clari-m",
     output_dir: str | Path | None = None,
     batch_size: int | None = None,
     num_gpus: int = 1,
@@ -577,7 +577,7 @@ def sample(
     seed: int | None = None,
 ) -> list[Crystal] | Path:
     sampler = ClariSampler(
-        checkpoint_path,
+        model,
         device=device,
         use_ema=use_ema,
         use_bf16=use_bf16,
