@@ -22,24 +22,90 @@ This repository contains code to reproduce the paper: Fast Organic Crystal Struc
 To install only the required packages for CLARI to run inference:
 
 ```bash
-pip install .
+pip install clari-csp
 ```
 
 ## Usage
 
 ### 🚀 Quickstart (CLI)
 
-You can run crystal structure prediction directly from the command line using a SMILES string. CLARI will automatically download the pretrained model from Hugging Face Hub if it is not found locally:
-
 ```bash
 # Generate 10 crystal structure samples for Ethanol (CCO)
-clari --smiles "CCO" --samples 10
+clari --smiles "CCO" --n-samples 10
 ```
 
-To see all available CLI options:
+This will work
+```
+clari "CCO.O.O"
+```
+but you may see more consistent results if you specify the number of copies of each component:
+```
+clari "CCO" 1 "O" 2
+```
 
-```bash
-clari --help
+other examples
+```
+clari "CC(=O)Oc1ccccc1C(=O)O.O.O.O" --samples 10
+```
+
+these should all be equivalent:
+```
+clari "CC(=O)Oc1ccccc1C(=O)O"
+clari "CC(=O)Oc1ccccc1C(=O)O" 4
+clari --smiles "CC(=O)Oc1ccccc1C(=O)O"
+clari --smiles "CC(=O)Oc1ccccc1C(=O)O" --copies 4
+clari --smiles "CC(=O)Oc1ccccc1C(=O)O" --copies 4 --samples 1
+```
+
+automatically AddHs
+
+these should all be equivalent:
+```
+clari "CC(=O)Oc1ccccc1C(=O)O" 4 "O" 4 --samples 10
+clari "CC(=O)Oc1ccccc1C(=O)O.O" --samples 10
+```
+and these are similar but subtly different:
+```
+clari --smiles "CC(=O)Oc1ccccc1C(=O)O.O" --copies 4 --samples 10
+clari "CC(=O)Oc1ccccc1C(=O)O.O" 2 "CC(=O)Oc1ccccc1C(=O)O.O" 2 --samples 10
+```
+
+
+these should be equivalent:
+```
+clari "CC(=O)Oc1ccccc1C(=O)O" 1 "O" 3
+clari --smiles "CC(=O)Oc1ccccc1C(=O)O" --copies 1 --smiles "O" --copies 3
+```
+and these are similar but subtly different:
+```
+clari "CC(=O)Oc1ccccc1C(=O)O.O.O.O" 1
+clari "CC(=O)Oc1ccccc1C(=O)O" 1 "O" 1 "O" 1 "O" 1
+```
+
+
+```
+clari "Cc1cc(sc1C#N)Nc2ccccc2[N+](=O)"
+
+default:
+copies = 4
+samples = 1
+
+
+clari --smiles "Cc1cc(sc1C#N)Nc2ccccc2[N+](=O)"
+
+clari --smiles "Cc1cc(sc1C#N)Nc2ccccc2[N+](=O)" --copies 2 --smiles "O" --copies 4 --samples 10
+
+clari --smiles "Cc1cc(sc1C#N)Nc2ccccc2[N+](=O)" --copies 2 --smiles "O" --copies 4 --samples 1000
+
+clari --smiles "Cc1cc(sc1C#N)Nc2ccccc2[N+](=O)" --smiles "O"
+4 copies of Cc1cc(sc1C#N)Nc2ccccc2[N+](=O)
+4 copies of O
+1 sample
+```
+
+```
+clari --smiles "[CH]12=[CH]3[CH]4=[CH]5[CH]1[Fe]23456789[CH]%10=[CH]6[CH]7=[CH]8[CH]%109" --copies 2
+clari "[CH]12=[CH]3[CH]4=[CH]5[CH]1[Fe]23456789[CH]%10=[CH]6[CH]7=[CH]8[CH]%109" 2
 ```
 
 ### 🐍 Quickstart (Python API)
@@ -47,13 +113,13 @@ clari --help
 You can also run crystal structure sampling directly inside Python:
 
 ```python
-from clari.inference.simplified_cli import sample
+from clari.inference.cli import sample
 
 # Predict 10 crystal structures for a SMILES string
 samples = sample(
     smiles="CCO",
     n_samples=10,
-    checkpoint="clari-huge",  # Downloads automatically if not cached locally
+    checkpoint_path="clari-h",  # Downloads automatically if not cached locally
 )
 
 # Export the first generated crystal structure to a CIF file

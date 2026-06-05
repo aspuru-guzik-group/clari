@@ -2,7 +2,11 @@ import dataclasses
 import itertools
 from collections import defaultdict
 from functools import cached_property
-from typing import Self
+
+try:
+    from typing import Self
+except ImportError:
+    from typing_extensions import Self
 
 import einops
 import gemmi
@@ -440,6 +444,8 @@ class Crystal:
         if any(m is None for m, _ in mols):
             raise ValueError(f"Could not parse SMILES: {smiles!r}")
         if add_hs:
+            for m, _ in mols:
+                m.UpdatePropertyCache(strict=False)
             mols = [(Chem.AddHs(m), c) for m, c in mols]
         return cls.from_rdmol(mols, csd_id=csd_id)
 

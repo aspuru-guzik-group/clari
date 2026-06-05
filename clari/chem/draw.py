@@ -100,7 +100,7 @@ def draw_crystal_trajectory(
     lattice: bool = True,
     view=None,
     viewer=None,
-    duration_play=20,
+    duration_play=2,
     duration_stop=10,
 ):
     if view is None:
@@ -143,3 +143,25 @@ def draw_crystal_trajectory(
     view.animate({"interval": interval})
     view.zoomTo()
     return view
+
+
+def draw_crystal_trajectory_from_batch(
+    out, batch_idx, lattice: bool = True, view=None, viewer=None, duration_play=2, duration_stop=10,
+):
+    sample = out[batch_idx]
+    base_crystal = sample.crystal
+    traj_tensor = sample.trajectory  # Shape: (steps + 1, 3 + num_atoms, 3)
+
+    traj_crystals = [
+        base_crystal.replace(x=traj_tensor[i])
+        for i in range(traj_tensor.shape[0])
+    ]
+
+    return draw_crystal_trajectory(
+        traj_crystals,
+        lattice=lattice,
+        view=view,
+        viewer=viewer,
+        duration_play=duration_play,
+        duration_stop=duration_stop,
+    )

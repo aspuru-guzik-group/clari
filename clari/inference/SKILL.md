@@ -22,10 +22,10 @@ Stop at stage 1 if the user just wants candidates. Continue to stage 2 if they s
 In priority order:
 
 1. **A molecule.** Accept an explicit-hydrogen SMILES string, a chemical name, an RDKit mol, or a co-crystal list of `(SMILES, copy_count)` pairs. If they give a name (ethanol, aspirin, paracetamol, urea), convert it to explicit-hydrogen SMILES yourself only for common molecules you are confident about. For unfamiliar or ambiguous names, confirm the SMILES with the user before running. **Never guess a SMILES.**
-2. **A checkpoint or Hub model.** Either pass a local checkpoint path with `--checkpoint_path` or a Hub model name with `--from_hub` (`Clari-M`, `Clari-L`). Hub checkpoints are available at `the-matter-lab/clari-data` as `clari-med.ckpt` and `clari-large.ckpt`, but Hub access requires internet or a warm local cache. Do not start sampling against a missing local checkpoint or an unavailable Hub cache.
+2. **A checkpoint or Hub model.** By default, CLARI loads `clari-h` from the Hugging Face Hub if `--checkpoint_path` is omitted. You can pass a local checkpoint path or another Hub model key (`clari-m`, `clari-l`) to `--checkpoint_path`.
 3. **`n_samples`** — how many structures to generate. Use whatever the user said. If they didn't say, default to 100.
 4. **`copies`** — copies of each molecule in the unit cell for single-component inputs. The CLI and Python defaults are 4. For agent-run CSP requests, default to **4** for small organics unless the user specified otherwise. Use 1 only when the molecule is very large (>100 heavy atoms) or the user explicitly asks. For co-crystals, hydrates, and solvates, encode the intended stoichiometry with per-component counts in the `(SMILES, copy_count)` pairs. The counts may differ between components. Ask if uncertain — wrong copy counts produce unphysical results.
-5. **Output directory.** Default to `out/<id>/` where `<id>` is the user-provided id or a sanitized molecule name.
+5. **Output directory.** Default to a generated folder name based on the sanitized SMILES and current timestamp. Or specify it manually with `--output_dir`.
 
 CLARI expects explicit-hydrogen SMILES. Prefer `C([H])([H])([H])C([H])([H])[H]` over `CC`.
 
@@ -34,35 +34,27 @@ CLARI expects explicit-hydrogen SMILES. Prefer `C([H])([H])([H])C([H])([H])[H]` 
 Always run via `uv` (per project convention):
 
 ```bash
-uv run sample \
-  --checkpoint_path clari.ckpt \
-  --output_dir out/<id> \
-  --smiles '<explicit-H SMILES>' \
-  --ids <id> \
-  --copies <copies> \
-  --n_samples <N>
+uv run sample '<explicit-H SMILES>' --n-samples <N>
 ```
 
-If using a cached or internet-accessible Hub checkpoint instead of a local file:
+If specifying a specific checkpoint path (local or hub) and/or output directory manually:
 
 ```bash
-uv run sample \
-  --from_hub Clari-M \
+uv run sample '<explicit-H SMILES>' \
+  --checkpoint_path clari-l \
   --output_dir out/<id> \
-  --smiles '<explicit-H SMILES>' \
-  --ids <id> \
-  --copies <copies> \
-  --n_samples <N>
+  --n-samples <N>
 ```
 
 Useful tweaks:
 
-- `--n_steps 50` — faster sampling, slightly lower quality
-- `--num_gpus N` — split across multiple GPUs
-- `--device cpu --compile false --use_bf16 false --n_steps 2 --n_samples 1` — quick CPU smoke test
+- `--n-steps 50` — faster sampling, slightly lower quality
+- `--device cpu --compile false --use_bf16 false --n-steps 2 --n-samples 1` — quick CPU smoke test
 - `--batch_size N` — pin batch size if automatic halve-and-retry on OOM still fails
-- `--overwrite true` — replace an existing CLARI output folder
-- clashing samples are dropped and the deficit is resampled by default; pass `--filter_clashing false` if the user wants every sample regardless of clashes. The resample loop is capped at `--max_resample_factor` × `n_samples` total attempts (default 10).
+- `--overwrite` — replace an existing CLARI output folder
+- `--no-filter-clashing` — disable clash filtering (enabled by default)
+- `--no-addHs` — disable adding implicit hydrogens (enabled by default)
+- clashing samples are dropped and the deficit is resampled by default. The resample loop is capped at `--max-resample-factor` × `n_samples` total attempts (default 10).
 
 ## Ranking and exporting
 
