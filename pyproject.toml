@@ -50,6 +50,7 @@ dev = [
     "torchmetrics",
     "ruff>=0.15.5",
     "py3dmol>=2.5.4",
+    "marimo>=0.23.9",
 ]
 
 [project.urls]
