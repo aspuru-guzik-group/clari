@@ -90,6 +90,21 @@ uv run clari --config batch.json
 Top-level keys (all optional): `model`, `output_dir`, `use_ema`, `use_bf16`, `pbar`.
 Per-request keys: `id`, `smiles`, `copies`, `samples`, `batch_size`.
 
+Batch configs are convenience orchestration for running several independent
+requests. Each request is sampled and written separately, rather than combining
+independent requests into one parquet:
+
+```text
+results/batch_run/
+  manifest.json
+  ethanol/
+    predictions.parquet
+    config.json
+  aspirin_trihydrate/
+    predictions.parquet
+    config.json
+```
+
 ### Rank
 
 Requires `fairchem-core`:
@@ -105,7 +120,7 @@ uv run --extra uma rank results/ethanol
 uv run export-cifs results/ethanol                         # all samples
 uv run export-cifs results/ethanol --top_k 3               # top 3 ranked (requires rankings.csv)
 uv run export-cifs results/ethanol --sample_idx 0 --sample_idx 2
-uv run export-cifs results/batch_run --ids ethanol         # one molecule from a batch parquet
+uv run export-cifs results/batch_run/ethanol               # one request from a batch run
 uv run export-cifs results/ethanol --output_dir my_cifs/
 ```
 

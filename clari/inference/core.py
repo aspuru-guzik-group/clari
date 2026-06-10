@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-import sys
+import json
 from argparse import ArgumentParser
+from pathlib import Path
 
 
 def build_parser() -> ArgumentParser:
@@ -33,45 +34,95 @@ def build_parser() -> ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = vars(parser.parse_args(argv))
-    try:
-        from clari.inference.inputs import parse_cli_request, parse_config_requests
+    from clari.inference.inputs import parse_cli_request, parse_config_requests
 
-        options = {}
-        if args["config"]:
-            if args["pos_args"] or args["smiles"]:
-                raise ValueError("`--config` cannot be combined with direct SMILES input.")
-            requests, options = parse_config_requests(args["config"])
-            for key, value in options.items():
-                if key in args and args[key] == parser.get_default(key):
-                    args[key] = value
+    options = {}
+    if args["config"]:
+        if args["pos_args"] or args["smiles"]:
+            raise ValueError("`--config` cannot be combined with direct SMILES input.")
+        requests, options = parse_config_requests(args["config"])
+        for key, value in options.items():
+            if key in args and args[key] == parser.get_default(key):
+                args[key] = value
+    else:
+        requests = parse_cli_request(
+            args["pos_args"], args["smiles"], args["copies"], args["id"], args["samples"]
+        )
+    if args["output_dir"] is None:
+        if args["config"] and len(requests) > 1:
+            args["output_dir"] = f"results/{Path(args['config']).stem}"
         else:
-            requests = parse_cli_request(
-                args["pos_args"], args["smiles"], args["copies"], args["id"], args["samples"]
-            )
-        if args["output_dir"] is None:
             args["output_dir"] = f"results/{requests[0].id}"
 
-        from clari.inference.sample import sample
+    from clari.inference.sample import ClariSampler, sample
 
-        result = sample(
-            requests,
-            model=args["model"],
-            output_dir=args["output_dir"],
-            batch_size=args["batch_size"],
-            num_gpus=args["num_gpus"],
+    use_ema = False if args["no_ema"] else bool(options.get("use_ema", True))
+    use_bf16 = False if args["no_bf16"] else bool(options.get("use_bf16", True))
+    pbar = False if args["no_pbar"] else bool(options.get("pbar", True))
+
+    if args["config"] and len(requests) > 1:
+        base_dir = Path(args["output_dir"])
+        base_dir.mkdir(parents=True, exist_ok=True)
+        sampler = ClariSampler(
+            args["model"],
             device=args["device"],
+            use_ema=use_ema,
+            use_bf16=use_bf16,
             n_steps=args["n_steps"],
-            use_ema=False if args["no_ema"] else bool(options.get("use_ema", True)),
-            use_bf16=False if args["no_bf16"] else bool(options.get("use_bf16", True)),
             compile=args["compile"],
             torch_threads=args["torch_threads"],
-            overwrite=args["overwrite"],
-            pbar=False if args["no_pbar"] else bool(options.get("pbar", True)),
+            num_gpus=args["num_gpus"],
             seed=args["seed"],
         )
-    except Exception as exc:
-        print(f"Error: {exc}", file=sys.stderr)
-        return 1
+        results = []
+        for request in requests:
+            result = sampler.sample(
+                request,
+                output_dir=base_dir / str(request.id),
+                batch_size=args["batch_size"],
+                num_gpus=args["num_gpus"],
+                overwrite=args["overwrite"],
+                pbar=pbar,
+                seed=args["seed"],
+            )
+            results.append(result)
+        (base_dir / "manifest.json").write_text(
+            json.dumps(
+                {
+                    "config": args["config"],
+                    "requests": [
+                        {
+                            "id": request.id,
+                            "output_dir": str(result),
+                            "predictions": str(result / "predictions.parquet"),
+                        }
+                        for request, result in zip(requests, results)
+                    ],
+                },
+                indent=2,
+            )
+            + "\n"
+        )
+        for result in results:
+            print(result / "predictions.parquet")
+        return 0
+
+    result = sample(
+        requests,
+        model=args["model"],
+        output_dir=args["output_dir"],
+        batch_size=args["batch_size"],
+        num_gpus=args["num_gpus"],
+        device=args["device"],
+        n_steps=args["n_steps"],
+        use_ema=use_ema,
+        use_bf16=use_bf16,
+        compile=args["compile"],
+        torch_threads=args["torch_threads"],
+        overwrite=args["overwrite"],
+        pbar=pbar,
+        seed=args["seed"],
+    )
     print(result / "predictions.parquet")
     return 0
 

@@ -79,7 +79,8 @@ Writes (default `--output_dir` is `results/<id>`):
 
 ### Batch via config file
 
-For multiple independent requests, use `--config`:
+For multiple independent requests, use `--config`. Batch configs write one
+result directory per request, not one mixed parquet:
 
 ```bash
 uv run clari --config batch.json
@@ -115,6 +116,19 @@ Top-level config keys (all optional, override CLI defaults):
 - `output_dir` — where to write results
 - `use_ema`, `use_bf16`, `pbar` — booleans
 Per-request keys: `id`, `smiles`, `copies`, `samples`, `batch_size`.
+
+Output layout:
+
+```text
+results/batch_run/
+  manifest.json
+  ethanol/
+    predictions.parquet
+    config.json
+  aspirin_trihydrate/
+    predictions.parquet
+    config.json
+```
 
 ### All CLI flags
 
@@ -165,8 +179,8 @@ uv run export-cifs results/ethanol --top_k 3
 # Specific sample indices
 uv run export-cifs results/ethanol --sample_idx 0 --sample_idx 2
 
-# Filter by request id
-uv run export-cifs results/ethanol --ids ethanol
+# Export one request from a batch run
+uv run export-cifs results/batch_run/ethanol
 
 # Custom output directory
 uv run export-cifs results/ethanol --output_dir my_cifs/
