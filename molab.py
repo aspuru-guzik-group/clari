@@ -43,7 +43,7 @@ def _(mo):
         .hero p { color: var(--muted); font-size: 1rem; line-height: 1.55; margin: 0; max-width: 720px; }
         .authors { color: var(--muted); font-size: .95rem; margin: 10px 0 14px; }
         .badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 16px; align-items: center; }
-        .badges img { display: block; height: 20px; }
+        .badges img { display: block; height: 20px; margin: 0; }
         .dl { align-items: center; background: var(--accent); border-radius: 6px; color: white; display: inline-flex; font-weight: 650; line-height: 1; padding: 10px 13px; text-decoration: none; }
         </style>
         <section class="hero">
