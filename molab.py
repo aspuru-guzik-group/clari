@@ -71,12 +71,14 @@ def _(mo):
 
 @app.cell
 def _(mo):
-    get_rows, set_rows = mo.state([
-        {"smiles": "CC(=O)Oc1ccccc1C(=O)O", "copies": 1},
-        {"smiles": "O", "copies": 3},
-    ])
-    add_btn = mo.ui.button(label="+ Add", on_click=lambda _: set_rows(lambda s: s + [{"smiles": "", "copies": 1}]))
-    return add_btn, get_rows, set_rows
+    get_rows, set_rows = mo.state(
+        [
+            {"smiles": "CC(=O)Oc1ccccc1C(=O)O", "copies": 1},
+            {"smiles": "O", "copies": 3},
+        ],
+        allow_self_loops=True,
+    )
+    return get_rows, set_rows
 
 
 @app.cell
@@ -84,16 +86,28 @@ def _(get_rows, mo, set_rows):
     rows = get_rows()
     smiles_inputs = mo.ui.array([mo.ui.text(value=r["smiles"]) for r in rows])
     copies_inputs = mo.ui.array([mo.ui.number(start=1, stop=16, step=1, value=r["copies"]) for r in rows])
+
+    def snapshot():
+        # current typed values, so add/delete don't reset edits
+        return [
+            {"smiles": smiles_inputs[j].value, "copies": int(copies_inputs[j].value)}
+            for j in range(len(smiles_inputs))
+        ]
+
     del_btns = mo.ui.array([
         mo.ui.button(
             label="×",
             on_click=lambda _, i=i: set_rows(
-                lambda s: [r for j, r in enumerate(s) if j != i] or [{"smiles": "", "copies": 1}]
+                [r for j, r in enumerate(snapshot()) if j != i] or [{"smiles": "", "copies": 1}]
             ),
         )
         for i in range(len(rows))
     ])
-    return copies_inputs, del_btns, smiles_inputs
+    add_btn = mo.ui.button(
+        label="+",
+        on_click=lambda _: set_rows(snapshot() + [{"smiles": "", "copies": 1}]),
+    )
+    return add_btn, copies_inputs, del_btns, smiles_inputs
 
 
 @app.cell
