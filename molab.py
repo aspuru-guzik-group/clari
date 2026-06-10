@@ -44,7 +44,7 @@ def _(mo):
         .authors { color: var(--muted); font-size: .95rem; margin: 10px 0 14px; }
         .badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 16px; align-items: center; }
         .badges img { display: block; height: 20px; margin: 0; }
-        .dl { align-items: center; background: var(--accent); border-radius: 6px; color: white; display: inline-flex; font-weight: 650; line-height: 1; padding: 10px 13px; text-decoration: none; }
+        .dl { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; color: var(--ink); display: inline-block; width: auto; font-size: .9rem; font-weight: 500; line-height: 1; padding: 8px 12px; text-decoration: none; }
         </style>
         <section class="hero">
             <h1>Fast Organic Crystal Structure Prediction with Unit Cell Flow Matching</h1>
