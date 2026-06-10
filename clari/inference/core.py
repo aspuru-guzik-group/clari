@@ -1,21 +1,14 @@
 from __future__ import annotations
 
 import sys
-
-from jsonargparse import ArgumentParser
-
-from clari.inference.inputs import (
-    parse_cli_request,
-    parse_config_requests,
-)
-from clari.inference.sample import sample
+from argparse import ArgumentParser
 
 
 def build_parser() -> ArgumentParser:
     parser = ArgumentParser(
         description="Sample organic crystal structures from unit cell SMILES strings."
     )
-    parser.add_argument("pos_args", nargs="*", default=[])
+    parser.add_argument("pos_args", nargs="*", metavar="SMILES [copies]", default=[])
     parser.add_argument("--config", type=str, default=None)
     parser.add_argument("--smiles", action="append", default=None)
     parser.add_argument("--copies", action="append", default=None)
@@ -39,28 +32,27 @@ def build_parser() -> ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
+    args = vars(parser.parse_args(argv))
     try:
-        args = vars(parser.parse_args(argv))
-        config_path = args.pop("config")
-        config_options = {}
-        if config_path:
-            requests, config_options = parse_config_requests(config_path)
-            for key, value in config_options.items():
+        from clari.inference.inputs import parse_cli_request, parse_config_requests
+
+        options = {}
+        if args["config"]:
+            if args["pos_args"] or args["smiles"]:
+                raise ValueError("`--config` cannot be combined with direct SMILES input.")
+            requests, options = parse_config_requests(args["config"])
+            for key, value in options.items():
                 if key in args and args[key] == parser.get_default(key):
                     args[key] = value
         else:
             requests = parse_cli_request(
-                args.pop("pos_args"),
-                args.pop("smiles"),
-                args.pop("copies"),
-                args.pop("id"),
-                args.pop("samples"),
+                args["pos_args"], args["smiles"], args["copies"], args["id"], args["samples"]
             )
-        use_ema = False if args["no_ema"] else bool(config_options.get("use_ema", True))
-        use_bf16 = False if args["no_bf16"] else bool(config_options.get("use_bf16", True))
-        pbar = False if args["no_pbar"] else bool(config_options.get("pbar", True))
         if args["output_dir"] is None:
-            raise ValueError("`--output_dir` is required for CLI sampling.")
+            args["output_dir"] = f"results/{requests[0].id}"
+
+        from clari.inference.sample import sample
+
         result = sample(
             requests,
             model=args["model"],
@@ -69,12 +61,12 @@ def main(argv: list[str] | None = None) -> int:
             num_gpus=args["num_gpus"],
             device=args["device"],
             n_steps=args["n_steps"],
-            use_ema=use_ema,
-            use_bf16=use_bf16,
+            use_ema=False if args["no_ema"] else bool(options.get("use_ema", True)),
+            use_bf16=False if args["no_bf16"] else bool(options.get("use_bf16", True)),
             compile=args["compile"],
             torch_threads=args["torch_threads"],
             overwrite=args["overwrite"],
-            pbar=pbar,
+            pbar=False if args["no_pbar"] else bool(options.get("pbar", True)),
             seed=args["seed"],
         )
     except Exception as exc:

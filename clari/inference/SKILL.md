@@ -33,42 +33,49 @@ Do not reference deleted modules: `cli.py`, `sampler.py`, `runner.py`, `io.py`.
 
 ## Available models
 
-| Name | Alias | Notes |
-|------|-------|-------|
-| `clari-m` | `clari-med` | Medium — fastest, good for exploration |
-| `clari-l` | `clari-large` | Large |
-| `clari-h` | `clari-huge` | Huge — highest quality, slowest |
+| Name | Notes |
+|------|-------|
+| `clari-m` | Medium — fastest, good for exploration |
+| `clari-l` | Large |
+| `clari-h` | Huge — highest quality, slowest |
 
 Downloaded automatically from HuggingFace (`the-matter-lab/clari`) on first use. Pass a local `.ckpt` path to use a custom checkpoint.
 
 ## CLI — sampling
 
-### Single molecule
+### The input grammar (one rule)
+
+A request is a flat list of `(component, copies)` pairs. Dots in a SMILES always
+split into components; a copies value broadcasts over the dot components of its
+token; omitted copies default to 4. Hydrogens are added automatically (AddHs).
 
 ```bash
-uv run clari \
-  --smiles "CCO" \
-  --samples 8 \
-  --output_dir results/ethanol
+# Quickstart: 10 candidates for ethanol, writes results/CCO_x4/
+uv run clari "CCO" --samples 10
+
+# Positional grammar: SMILES [copies] [SMILES [copies]]...
+uv run clari "CCO" 1 "O" 3 --samples 8 --output_dir results/ethanol_trihydrate
+
+# Dotted SMILES split; copies broadcast: (CCO,2),(O,2)
+uv run clari "CCO.O" 2
 ```
 
-Writes:
-- `results/ethanol/predictions.parquet` — one row per sample: `id`, `sample_idx`, `cif`
-- `results/ethanol/config.json` — full run config for reproducibility
-
-### Multi-component (co-crystal)
-
-Repeated `--smiles` in one CLI call describes one composition, not multiple independent jobs:
+The `--smiles`/`--copies` flag form is a pure synonym of the positional form
+(use one or the other, not both):
 
 ```bash
-uv run clari \
-  --smiles "CC(=O)Oc1ccccc1C(=O)O" \
-  --copies 1 \
-  --smiles "O" \
-  --copies 3 \
-  --samples 8 \
-  --output_dir results/aspirin_trihydrate
+uv run clari --smiles "CC(=O)Oc1ccccc1C(=O)O" --copies 1 --smiles "O" --copies 3 --samples 8
+
+# Repeated --copies with a single dotted --smiles distributes per component
+uv run clari --smiles "CCO.O" --copies 1 --copies 3
 ```
+
+Repeated SMILES in one CLI call describes one composition, not multiple
+independent jobs — use `--config` for batches.
+
+Writes (default `--output_dir` is `results/<id>`):
+- `<output_dir>/predictions.parquet` — one row per sample: `id`, `sample_idx`, `cif`
+- `<output_dir>/config.json` — full run config for reproducibility
 
 ### Batch via config file
 
@@ -113,13 +120,14 @@ Per-request keys: `id`, `smiles`, `copies`, `samples`, `batch_size`.
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--smiles` | required | SMILES string (repeatable for co-crystal) |
+| positional | — | `SMILES [copies] [SMILES [copies]]...` |
+| `--smiles` | — | SMILES string (repeatable; synonym of positional form) |
 | `--copies` | 4 | Molecules per unit cell (repeatable, matched by index to `--smiles`) |
 | `--samples` | 1 | Number of candidate structures to generate |
 | `--id` | auto | Labels every row in `predictions.parquet` and becomes the CIF subdirectory name. Auto-generated from SMILES if omitted. Valid characters: letters, digits, `.`, `_`, `-`; others are replaced with `_`. Max 80 chars. |
 | `--config` | — | Path to batch JSON config (mutually exclusive with direct SMILES) |
 | `--model` | `clari-m` | Model name (`clari-m`, `clari-l`, `clari-h`) |
-| `--output_dir` | — | Directory to write results; required for multi-GPU |
+| `--output_dir` | `results/<id>` | Directory to write results |
 | `--batch_size` | auto | Samples per forward pass; auto-scaled to GPU memory if unset |
 | `--num_gpus` | 1 | Number of GPUs (requires `--output_dir`) |
 | `--device` | auto | `cuda`, `mps`, `cpu`, or `cuda:N` |
@@ -213,7 +221,11 @@ sampler.sample(
 from clari.inference import rank, export_cifs
 
 # Rank by UMA energy — returns DataFrame: sample_idx, id, energies, rank
-df = rank("results/ethanol")
+df = rank("results/ethanol")   # writes energies.csv + rankings.csv next to predictions.parquet
+
+# Rank an in-memory list of Crystal objects — writes nothing
+crystals = sampler.sample("CCO", id="ethanol", samples=8)
+df = rank(crystals)
 
 # Export from disk
 export_cifs("results/ethanol")

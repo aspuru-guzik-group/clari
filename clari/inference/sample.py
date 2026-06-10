@@ -14,9 +14,9 @@ from tqdm.auto import tqdm
 from clari.chem import Crystal
 from clari.inference.inputs import (
     SampleRequest,
-    _make_request,
+    make_request,
     request_components,
-    resolve_hub_checkpoint,
+    resolve_checkpoint,
 )
 from clari.pipelines.base.lit import LitDiT
 
@@ -26,16 +26,13 @@ H100_REFERENCE_MEMORY_GB = 81.0
 def _seed_everything(seed: int) -> None:
     import random
 
+    import numpy as np
+
     random.seed(seed)
+    np.random.seed(seed)
     torch.manual_seed(seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
-    try:
-        import numpy as np
-
-        np.random.seed(seed)
-    except ImportError:
-        pass
 
 
 def resolve_device(device: str | torch.device | None) -> torch.device:
@@ -49,10 +46,13 @@ def resolve_device(device: str | torch.device | None) -> torch.device:
 
 
 def request_to_crystal(request: SampleRequest) -> Crystal:
-    return Crystal.from_smiles(
-        request_components(request),
-        csd_id=request.id,
-    )
+    components = request_components(request)
+    # AddHs for plain SMILES; .mol files and molblocks already carry explicit hydrogens.
+    add_hs = [
+        not (s.lower().endswith(".mol") or "M  END" in s or Path(s).is_file())
+        for s, _ in components
+    ]
+    return Crystal.from_smiles(components, csd_id=request.id, add_hs=add_hs)
 
 
 def build_run_config(
@@ -124,15 +124,12 @@ def auto_batch_size(n_atoms: int, batch_size: int | None, device: str | torch.de
         base = 200
     else:
         base = 25
-    if torch.cuda.is_available():
-        resolved = resolve_device(device)
-        if resolved.type == "cuda":
-            index = resolved.index if resolved.index is not None else torch.cuda.current_device()
-            total_gb = torch.cuda.get_device_properties(index).total_memory / 1e9
-            scale = min(
-                1.0, max(1.0 / H100_REFERENCE_MEMORY_GB, total_gb / H100_REFERENCE_MEMORY_GB)
-            )
-            return max(1, int(base * scale))
+    resolved = resolve_device(device)
+    if resolved.type == "cuda":
+        index = resolved.index if resolved.index is not None else torch.cuda.current_device()
+        total_gb = torch.cuda.get_device_properties(index).total_memory / 1e9
+        scale = min(1.0, total_gb / H100_REFERENCE_MEMORY_GB)
+        return max(1, int(base * scale))
     return base
 
 
@@ -146,15 +143,8 @@ def load_lit(
     checkpoint = torch.load(path, map_location="cpu", weights_only=False)
     lit = LitDiT(**checkpoint["hyper_parameters"])
     if use_ema:
-        ema_weights = (
-            (checkpoint.get("ema") or {}).get("ema_weights")
-            if isinstance(checkpoint, dict)
-            else None
-        )
-        lit.load_state_dict(
-            ema_weights if isinstance(ema_weights, dict) else checkpoint["state_dict"],
-            strict=False,
-        )
+        ema_weights = (checkpoint.get("ema") or {}).get("ema_weights")
+        lit.load_state_dict(ema_weights or checkpoint["state_dict"], strict=False)
     else:
         lit.load_state_dict(checkpoint["state_dict"])
     if n_steps is not None:
@@ -186,16 +176,7 @@ class ClariSampler:
     ):
         if n_steps is not None and n_steps <= 0:
             raise ValueError(f"n_steps must be positive, got {n_steps}")
-        checkpoint_key = str(checkpoint).strip().lower()
-        if checkpoint_key in (
-            "clari-m",
-            "clari-l",
-            "clari-h",
-            "clari-med",
-            "clari-large",
-            "clari-huge",
-        ):
-            checkpoint = resolve_hub_checkpoint(checkpoint_key)
+        checkpoint = resolve_checkpoint(checkpoint)
         resolved_device = resolve_device(device)
         torch.set_num_threads(torch_threads)
         torch.set_float32_matmul_precision("high")
@@ -209,48 +190,14 @@ class ClariSampler:
         self.torch_threads = torch_threads
         self.num_gpus = num_gpus
         self.seed = seed
-        if seed is not None:
-            _seed_everything(seed)
-
-    @classmethod
-    def from_checkpoint(
-        cls,
-        path: str | Path,
-        *,
-        device: str | torch.device | None = "auto",
-        use_ema: bool = True,
-        use_bf16: bool = True,
-        n_steps: int | None = 50,
-        compile: bool = False,
-        torch_threads: int = 1,
-        num_gpus: int = 1,
-        seed: int | None = None,
-    ) -> ClariSampler:
-        return cls(
-            str(path),
-            device=device,
-            use_ema=use_ema,
-            use_bf16=use_bf16,
-            n_steps=n_steps,
-            compile=compile,
-            torch_threads=torch_threads,
-            num_gpus=num_gpus,
-            seed=seed,
-        )
 
     @torch.inference_mode()
     def sample_batch(self, crystal: Crystal, count: int) -> list[Crystal]:
-        batch = Crystal.collate([crystal])
         current = count
         while True:
             batch_gpu = None
             try:
-                crystals = batch.unbatch()
-                batch_gpu = (
-                    type(batch)
-                    .collate([sample for sample in crystals for _ in range(current)])
-                    .to(self.device)
-                )
+                batch_gpu = Crystal.collate([crystal] * current).to(self.device)
                 with torch.autocast(
                     device_type=self.device.type,
                     dtype=torch.bfloat16,
@@ -319,10 +266,11 @@ class ClariSampler:
         elif isinstance(smiles, list) and smiles and isinstance(smiles[0], SampleRequest):
             requests = list(smiles)
         else:
-            requests = [_make_request(smiles, id=id, copies=copies, samples=samples)]
+            requests = [make_request(smiles, id=id, copies=copies, samples=samples)]
         num_gpus = self.num_gpus if num_gpus is None else num_gpus
         if output_dir is None and num_gpus > 1:
             raise ValueError("num_gpus > 1 requires output_dir.")
+        seed = self.seed if seed is None else seed
         if seed is not None:
             _seed_everything(seed)
         if output_dir is None:
@@ -335,16 +283,18 @@ class ClariSampler:
                 if pbar
                 else None
             )
-            samples: list[Crystal] = []
+            results: list[Crystal] = []
             try:
                 for request in requests:
-                    samples.extend(
-                        self.sample_request(request, batch_size=request.batch_size or batch_size, progress=progress)
+                    results.extend(
+                        self.sample_request(
+                            request, batch_size=request.batch_size or batch_size, progress=progress
+                        )
                     )
             finally:
                 if progress is not None:
                     progress.close()
-            return samples
+            return results
         return sample_to_directory(
             self,
             requests=requests,
@@ -366,7 +316,9 @@ def build_chunks(
     sample_idx = 0
     for request_index, request in enumerate(requests):
         crystal = request_to_crystal(request)
-        chunk_size = auto_batch_size(int(crystal.num_atoms), request.batch_size or batch_size, device)
+        chunk_size = auto_batch_size(
+            int(crystal.num_atoms), request.batch_size or batch_size, device
+        )
         for local_start in range(0, request.samples, chunk_size):
             count = min(chunk_size, request.samples - local_start)
             chunks.append(
@@ -458,7 +410,7 @@ def gpu_worker(
 
     try:
         torch.cuda.set_device(rank)
-        sampler = ClariSampler.from_checkpoint(
+        sampler = ClariSampler(
             model,
             device=f"cuda:{rank}",
             use_ema=use_ema,
@@ -467,8 +419,9 @@ def gpu_worker(
             compile=compile,
             torch_threads=torch_threads,
             num_gpus=1,
-            seed=None if seed is None else seed + rank,
         )
+        if seed is not None:
+            _seed_everything(seed + rank)
         run_chunks(sampler, requests, chunks, Path(shards_dir), pbar=False)
     except Exception:
         error_queue.put((rank, traceback.format_exc()))
@@ -617,9 +570,10 @@ def save(crystals: list[Crystal], output_dir: str | Path, overwrite: bool = Fals
 # Does not support batching, multi-GPU, or disk output.
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class CrystalTrajectory:
-    crystal: Crystal           # final predicted structure
+    crystal: Crystal  # final predicted structure
     trajectory: torch.Tensor  # (steps+1, 3+num_atoms, 3)
 
 
@@ -633,7 +587,7 @@ def sample_trajectory(
     samples: int = 1,
 ) -> list[CrystalTrajectory]:
     """Demo-only: sample crystal structures and return their full diffusion trajectories."""
-    request = _make_request(smiles, id=id, copies=copies, samples=samples)
+    request = make_request(smiles, id=id, copies=copies, samples=samples)
     template = request_to_crystal(request)
     batch = Crystal.collate([template]).to(sampler.device)
 
@@ -651,8 +605,10 @@ def sample_trajectory(
                 return_trajectory=True,
             )
         traj = traj.squeeze(1).cpu()
-        results.append(CrystalTrajectory(
-            crystal=template.replace(x=traj[-1]),
-            trajectory=traj,
-        ))
+        results.append(
+            CrystalTrajectory(
+                crystal=template.replace(x=traj[-1]),
+                trajectory=traj,
+            )
+        )
     return results

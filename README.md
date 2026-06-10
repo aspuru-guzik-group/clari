@@ -40,30 +40,30 @@ The workflow has three steps:
 
 Models (`clari-m`, `clari-l`, `clari-h`) download automatically from HuggingFace on first use.
 
-### Single molecule
+### Quickstart
 
 ```bash
-uv run clari \
-  --model clari-h \
-  --smiles "CCO" \
-  --id ethanol \
-  --samples 8 \
-  --output_dir results/ethanol
+# 10 candidate structures for ethanol, written to results/CCO_x4/
+uv run clari "CCO" --samples 10
 ```
 
-**`--copies`** sets the number of molecules per unit cell (Z value, default 4). **`--id`** labels the output rows and becomes the CIF subdirectory name; auto-generated from SMILES if omitted.
-
-### Co-crystal
-
-Repeated `--smiles` flags describe one multi-component composition:
+The grammar is `clari SMILES [copies] [SMILES [copies]]...` — a request is a flat
+list of `(component, copies)` pairs. Dots in a SMILES split into components, a
+copies value broadcasts over the dot components of its token, and omitted copies
+default to 4 (the Z value, molecules per unit cell). Hydrogens are added
+automatically.
 
 ```bash
-uv run clari \
-  --smiles "CC(=O)Oc1ccccc1C(=O)O" --copies 1 \
-  --smiles "O"                       --copies 3 \
-  --samples 8 \
-  --output_dir results/aspirin_trihydrate
+uv run clari "CC(=O)Oc1ccccc1C(=O)O" 1 "O" 3 --samples 8   # aspirin trihydrate co-crystal
+uv run clari "CCO.O" 2                                     # dotted SMILES: (CCO,2),(O,2)
+uv run clari "CCO" --model clari-h --id ethanol            # pick model, label outputs
 ```
+
+`--smiles`/`--copies` flags are a synonym of the positional form (use one or the
+other): `clari --smiles "CC(=O)Oc1ccccc1C(=O)O" --copies 1 --smiles "O" --copies 3`.
+
+**`--id`** labels the output rows and becomes the CIF subdirectory name;
+auto-generated from SMILES if omitted. **`--output_dir`** defaults to `results/<id>`.
 
 ### Batch via config
 
@@ -142,7 +142,8 @@ from clari.inference import save, rank, export_cifs
 crystals = sampler.sample("CCO", id="ethanol", samples=100)
 save(crystals, "results/ethanol")
 
-df = rank("results/ethanol")  # returns DataFrame: sample_idx, id, energies, rank
+df = rank("results/ethanol")  # writes energies.csv + rankings.csv, returns DataFrame
+df = rank(crystals)           # fully in-memory: ranks a list of Crystals, writes nothing
 
 export_cifs("results/ethanol")
 export_cifs("results/ethanol", top_k=3)

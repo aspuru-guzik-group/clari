@@ -402,29 +402,15 @@ def resolve_input_path(input_path: Path) -> Path:
     return input_path
 
 
-def main(
-    input_path: Path,
-    batch_size: int,
-    num_gpus: int,
-    torch_threads: int,
-    overwrite: bool = False,
+def compute_energies_df(
+    df: pl.DataFrame,
+    *,
+    batch_size: int = 32,
+    num_gpus: int = 1,
+    torch_threads: int = 1,
     timing: bool = False,
-) -> None:
-    if batch_size <= 0:
-        raise ValueError(f"batch_size must be positive, got {batch_size}")
-    if num_gpus <= 0:
-        raise ValueError(f"num_gpus must be positive, got {num_gpus}")
-    if torch_threads <= 0:
-        raise ValueError(f"torch_threads must be positive, got {torch_threads}")
-
-    input_path = resolve_input_path(input_path)
-    df = load_input_df(input_path)
-    if len(df) == 0:
-        raise ValueError(f"No rows loaded from input: {input_path}")
-    energies_csv_path = input_path.with_name(ENERGIES_CSV_NAME)
-    if energies_csv_path.exists() and not overwrite:
-        raise FileExistsError(f"Output already exists: {energies_csv_path}. Pass --overwrite.")
-
+) -> tuple[list[float], list]:
+    """Compute UMA energies for an in-memory predictions DataFrame with id/cif columns."""
     ids = df.get_column(ID_COLUMN).to_list()
     cifs = df.get_column(CIF_COLUMN).to_list()
     rows = list(zip(range(len(df)), ids, cifs, strict=True))
@@ -457,6 +443,35 @@ def main(
 
     if len(energies) != len(df):
         raise RuntimeError(f"Expected {len(df)} energies, got {len(energies)}")
+    return energies, timing_rows
+
+
+def main(
+    input_path: Path,
+    batch_size: int,
+    num_gpus: int,
+    torch_threads: int,
+    overwrite: bool = False,
+    timing: bool = False,
+) -> None:
+    if batch_size <= 0:
+        raise ValueError(f"batch_size must be positive, got {batch_size}")
+    if num_gpus <= 0:
+        raise ValueError(f"num_gpus must be positive, got {num_gpus}")
+    if torch_threads <= 0:
+        raise ValueError(f"torch_threads must be positive, got {torch_threads}")
+
+    input_path = resolve_input_path(input_path)
+    df = load_input_df(input_path)
+    if len(df) == 0:
+        raise ValueError(f"No rows loaded from input: {input_path}")
+    energies_csv_path = input_path.with_name(ENERGIES_CSV_NAME)
+    if energies_csv_path.exists() and not overwrite:
+        raise FileExistsError(f"Output already exists: {energies_csv_path}. Pass --overwrite.")
+
+    energies, timing_rows = compute_energies_df(
+        df, batch_size=batch_size, num_gpus=num_gpus, torch_threads=torch_threads, timing=timing
+    )
 
     pl.DataFrame(
         {

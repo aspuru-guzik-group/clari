@@ -2,13 +2,8 @@ from __future__ import annotations
 
 import re
 import shutil
+from argparse import ArgumentParser
 from pathlib import Path
-
-import polars as pl
-from jsonargparse import ArgumentParser
-
-from clari.chem import Crystal
-from clari.inference.inputs import resolve_predictions_path
 
 SAMPLE_IDX_COLUMN = "sample_idx"
 ID_COLUMN = "id"
@@ -17,7 +12,7 @@ RANK_COLUMN = "rank"
 
 
 def export_cifs(
-    input_path: Path | list[Crystal],
+    input_path: Path | list,
     output_dir: Path | None = None,
     rankings_path: Path | None = None,
     top_k: int | None = None,
@@ -25,20 +20,28 @@ def export_cifs(
     sample_idx: int | list[int] | None = None,
     overwrite: bool = False,
     id: str | None = None,
-) -> None:
+) -> Path:
     """Export CIF files from a predictions.parquet results file, directory, or list of Crystal objects."""
+    import polars as pl
+
+    from clari.inference.inputs import resolve_predictions_path
+
     if isinstance(input_path, list):
         if output_dir is None:
-            raise ValueError("output_dir is required when exporting from a list of Crystal objects.")
+            raise ValueError(
+                "output_dir is required when exporting from a list of Crystal objects."
+            )
         output_dir = Path(output_dir)
         compound_dir = output_dir / _safe_path_part(id or "samples")
         if compound_dir.exists() and not overwrite:
-            raise FileExistsError(f"Output directory already exists: {compound_dir}. Pass --overwrite.")
+            raise FileExistsError(
+                f"Output directory already exists: {compound_dir}. Pass --overwrite."
+            )
         compound_dir.mkdir(parents=True, exist_ok=True)
         for idx, crystal in enumerate(input_path):
             (compound_dir / f"sample_{idx:06d}.cif").write_text(crystal.to_cif())
         print(f"Exported {len(input_path)} CIFs to {compound_dir}")
-        return
+        return compound_dir
 
     predictions_path = resolve_predictions_path(input_path)
     output_dir = output_dir or predictions_path.with_name("cifs")
@@ -86,6 +89,7 @@ def export_cifs(
         path.write_text(row[CIF_COLUMN])
 
     print(f"Exported {len(df)} CIFs to {output_dir}")
+    return output_dir
 
 
 def _resolve_rankings_path(predictions_path: Path, rankings_path: Path | None) -> Path | None:
