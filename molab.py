@@ -65,8 +65,9 @@ def _(mo):
     model = mo.ui.dropdown(options=["Clari Medium", "Clari Large", "Clari Huge"], value="Clari Medium", label="Model")
     samples = mo.ui.number(start=1, stop=64, step=1, value=8, label="Samples")
     n_steps = mo.ui.number(start=1, stop=200, step=1, value=50, label="Steps")
+    z = mo.ui.number(start=1, stop=16, step=1, value=4, label="Z")
     run = mo.ui.run_button(label="Sample crystals")
-    return model, n_steps, run, samples
+    return model, n_steps, run, samples, z
 
 
 @app.cell
@@ -111,7 +112,7 @@ def _(get_rows, mo, set_rows):
 
 
 @app.cell
-def _(add_btn, copies_inputs, del_btns, mo, model, n_steps, run, samples, smiles_inputs):
+def _(add_btn, copies_inputs, del_btns, mo, model, n_steps, run, samples, smiles_inputs, z):
     _header = mo.hstack(
         [mo.Html("<div style='min-width:30px'></div>"), mo.Html("<strong>SMILES</strong>" + "&nbsp;" * 30), mo.Html("<div style='min-width:90px'><strong>Count</strong></div>")],
         justify="start", gap=0.5,
@@ -121,8 +122,8 @@ def _(add_btn, copies_inputs, del_btns, mo, model, n_steps, run, samples, smiles
         for i in range(len(smiles_inputs))
     ]
     mo.vstack([
-        mo.hstack([model, samples, n_steps], widths="equal"),
-        mo.md("<p style='color:#657188;font-size:.92rem'>Each row is one molecular component. Count (Z) is the number of that molecule in the unit cell.</p>"),
+        mo.hstack([model, samples, n_steps, z], widths="equal"),
+        mo.md("<p style='color:#657188;font-size:.92rem'>Each row is one molecular component; Count is its number in the asymmetric unit. Z multiplies the whole composition to form the unit cell.</p>"),
         mo.hstack([mo.vstack([_header] + _rows + [add_btn], gap=0.4)], justify="center"),
         run,
     ], gap=1.0)
@@ -136,17 +137,18 @@ def _(mo):
 
 
 @app.cell
-def _(ClariSampler, copies_inputs, model, n_steps, run, sample_trajectory, samples, set_result, smiles_inputs):
+def _(ClariSampler, copies_inputs, model, n_steps, run, sample_trajectory, samples, set_result, smiles_inputs, z):
     if run.value:
         _model_ids = {"Clari Medium": "clari-m", "Clari Large": "clari-l", "Clari Huge": "clari-h"}
+        _z = int(z.value)
         _smiles = [smiles_inputs[i].value.strip() for i in range(len(smiles_inputs)) if smiles_inputs[i].value.strip()]
-        _copies = [int(copies_inputs[i].value) for i in range(len(smiles_inputs)) if smiles_inputs[i].value.strip()]
+        _copies = [int(copies_inputs[i].value) * _z for i in range(len(smiles_inputs)) if smiles_inputs[i].value.strip()]
         _sampler = ClariSampler(_model_ids[model.value], n_steps=int(n_steps.value), torch_threads=1)
         _trajectories = sample_trajectory(_sampler, _smiles, copies=_copies, samples=int(samples.value))
         set_result({
             "crystals": [t.crystal for t in _trajectories],
             "trajectories": _trajectories,
-            "smiles": " + ".join(f"{s} x{z}" for s, z in zip(_smiles, _copies, strict=False)),
+            "smiles": " + ".join(f"{_s} x{_c}" for _s, _c in zip(_smiles, _copies, strict=False)),
             "model": model.value,
         })
     return
