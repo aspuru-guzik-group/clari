@@ -1,5 +1,5 @@
 # /// script
-# requires-python = ">=3.10"
+# requires-python = ">=3.11"
 # dependencies = [
 #     "clari",
 #     "marimo",
@@ -7,7 +7,6 @@
 #     "anywidget",
 #     "traitlets",
 #     "rdkit",
-#     "httpx[socks]",
 # ]
 # ///
 
