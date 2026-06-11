@@ -1,0 +1,87 @@
+[project]
+name = "clari"
+version = "0.1.1"
+description = "Fast Organic Crystal Structure Prediction with Unit Cell Flow Matching"
+requires-python = ">=3.11"
+license = "CC-BY-NC-4.0"
+license-files = ["LICENSE"]
+authors = [
+    { name = "Alston Lo", email = "alston@mit.edu" },
+    {name = "Luka Mucko", email = "luka.mucko@gmail.com"}, 
+    {name = "Austin Cheng", email = "austin@cs.toronto.edu"}
+]
+readme = "README.md"
+dependencies = [
+    "ase>=3.28.0",
+    "einops",
+    "gemmi",
+    "jsonargparse",
+    "lightning",
+    "networkx",
+    "numpy",
+    "rdkit>=2025.9.3",
+    "scipy",
+    "torch",
+    "torch-geometric",
+    "tqdm",
+    "huggingface-hub>=1.14.0",
+    "polars",
+    "typing-extensions; python_version < '3.11'",
+    "average-minimum-distance>=1.6.1",
+    "pymatgen",
+]
+
+[project.optional-dependencies]
+uma = [
+    "fairchem-core>=2.19.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.0",
+    "posebusters>=0.6.5",
+    "p-tqdm",
+    "multiprocess",
+    "stopit",
+    "wandb>=0.26",
+    "seaborn>=0.13.2",
+    "matplotlib",
+    "triton; sys_platform == 'linux'",
+    "torchmetrics",
+    "ruff>=0.15.5",
+    "py3dmol>=2.5.4",
+    "marimo>=0.23.9",
+]
+
+[project.urls]
+Repository = "https://github.com/aspuru-guzik-group/clari"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project.scripts]
+train = "clari.pipelines.base.train:main"
+sample-test = "clari.evaluation.sample:cli"
+collision = "clari.evaluation.collision:main"
+compute-energies = "clari.evaluation.compute_energies:cli"
+summarize = "clari.evaluation.summarize:main"
+clari = "clari.inference.core:main"
+rank = "clari.inference.rank:main"
+export-cifs = "clari.inference.export:main"
+clari-skill = "clari.skill:main"
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+extend-select = ["I"]
+ignore = [
+    "E741", # ambiguous variable name
+    "E722", # bare except
+    "E402", # import not at top of file
+]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]
