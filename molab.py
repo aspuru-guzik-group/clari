@@ -220,6 +220,19 @@ def _(get_comps, ketcher, mo, mol_svg, set_comps):
         label="➕ Add drawn molecule to unit cell", kind="neutral", on_click=_add
     )
 
+    smiles_text = mo.ui.text(
+        placeholder="Paste a SMILES, e.g. CC(=O)Oc1ccccc1C(=O)O", full_width=True
+    )
+
+    def _add_smiles(_):
+        from rdkit import Chem
+
+        smi = smiles_text.value.strip()
+        if smi and Chem.MolFromSmiles(smi) is not None:
+            set_comps(snapshot() + [{"smiles": smi, "copies": 1}])
+
+    add_smiles_btn = mo.ui.button(label="➕ Add SMILES", kind="neutral", on_click=_add_smiles)
+
     if comps:
         _rows = [
             mo.hstack(
@@ -272,6 +285,10 @@ def _(get_comps, ketcher, mo, mol_svg, set_comps):
             ),
             _list,
             add_btn,
+            mo.hstack(
+                [smiles_text, add_smiles_btn],
+                justify="start", gap=0.5, align="center", widths=[5, 1],
+            ),
         ],
         gap=0.6,
     )
