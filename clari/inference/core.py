@@ -16,18 +16,18 @@ def build_parser() -> ArgumentParser:
     parser.add_argument("--id", type=str, default=None)
     parser.add_argument("--samples", type=int, default=1)
     parser.add_argument("--model", type=str, default="clari-h")
-    parser.add_argument("--output_dir", type=str, default=None)
-    parser.add_argument("--batch_size", type=int, default=None)
-    parser.add_argument("--num_gpus", type=int, default=1)
+    parser.add_argument("--output-dir", type=str, default=None)
+    parser.add_argument("--batch-size", type=int, default=None)
+    parser.add_argument("--num-gpus", type=int, default=1)
     parser.add_argument("--device", type=str, default="auto")
-    parser.add_argument("--n_steps", type=int, default=50)
-    parser.add_argument("--torch_threads", type=int, default=1)
+    parser.add_argument("--n-steps", type=int, default=50)
+    parser.add_argument("--torch-threads", type=int, default=1)
     parser.add_argument("--seed", type=int, default=None)
     parser.add_argument("--compile", action="store_true")
     parser.add_argument("--overwrite", action="store_true")
-    parser.add_argument("--no_ema", action="store_true")
-    parser.add_argument("--no_bf16", action="store_true")
-    parser.add_argument("--no_pbar", action="store_true")
+    parser.add_argument("--no-ema", action="store_true")
+    parser.add_argument("--no-bf16", action="store_true")
+    parser.add_argument("--no-pbar", action="store_true")
     parser.add_argument("--no-export-cifs", action="store_false", dest="export_cifs", default=True)
     return parser
 
@@ -80,6 +80,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if args["config"] and len(requests) > 1:
         base_dir = Path(args["output_dir"])
+        if base_dir.exists() and any(base_dir.iterdir()) and not args["overwrite"]:
+            raise FileExistsError(f"Output directory already exists: {base_dir}")
         base_dir.mkdir(parents=True, exist_ok=True)
         sampler = ClariSampler(
             args["model"],

@@ -7,9 +7,13 @@ description: Run CLARI crystal structure inference, batch sampling, ranking, and
 
 CLARI predicts organic crystal structures from molecular SMILES. The workflow has three steps:
 
-1. `clari` — samples candidate crystal structures, writes `predictions.parquet`
+1. `clari` — samples candidate crystal structures, writes `predictions.parquet`, and (by default) exports `.cif` files
 2. `rank` — scores each candidate with FairChem UMA energy, writes `rankings.csv`
-3. `export-cifs` — writes `.cif` files to disk from saved samples
+3. `export-cifs` — (re-)exports `.cif` files from saved samples, optionally filtered by rank/id/index
+
+`clari` exports CIFs automatically after sampling; pass `--no-export-cifs` to skip
+it and write only `predictions.parquet`. The standalone `export-cifs` command is
+still used to re-export later, or to export a ranked subset (`--top-k`).
 
 ## Package layout
 
@@ -37,7 +41,7 @@ Do not reference deleted modules: `cli.py`, `sampler.py`, `runner.py`, `io.py`.
 |------|-------|
 | `clari-m` | Medium — fastest, good for exploration |
 | `clari-l` | Large |
-| `clari-h` | Huge — highest quality, slowest |
+| `clari-h` | Huge — highest quality, slowest (**default**) |
 
 Downloaded automatically from HuggingFace (`the-matter-lab/clari`) on first use. Pass a local `.ckpt` path to use a custom checkpoint.
 
@@ -54,7 +58,7 @@ token; omitted copies default to 4. Hydrogens are added automatically (AddHs).
 uv run clari "CCO" --samples 10
 
 # Positional grammar: SMILES [copies] [SMILES [copies]]...
-uv run clari "CCO" 1 "O" 3 --samples 8 --output_dir results/ethanol_trihydrate
+uv run clari "CCO" 1 "O" 3 --samples 8 --output-dir results/ethanol_trihydrate
 
 # Dotted SMILES split; copies broadcast: (CCO,2),(O,2)
 uv run clari "CCO.O" 2
@@ -73,9 +77,10 @@ uv run clari --smiles "CCO.O" --copies 1 --copies 3
 Repeated SMILES in one CLI call describes one composition, not multiple
 independent jobs — use `--config` for batches.
 
-Writes (default `--output_dir` is `results/<id>`):
+Writes (default `--output-dir` is `results/<id>`):
 - `<output_dir>/predictions.parquet` — one row per sample: `id`, `sample_idx`, `cif`
 - `<output_dir>/config.json` — full run config for reproducibility
+- `<output_dir>/cifs/<id>/` — `.cif` files, exported by default (skip with `--no-export-cifs`)
 
 ### Batch via config file
 
@@ -140,18 +145,19 @@ results/batch_run/
 | `--samples` | 1 | Number of candidate structures to generate |
 | `--id` | auto | Labels every row in `predictions.parquet` and becomes the CIF subdirectory name. Prefer setting it explicitly — the auto-generated SMILES-based name is cryptic and can collide. Valid characters: letters, digits, `.`, `_`, `-`; others are replaced with `_`. Max 80 chars. |
 | `--config` | — | Path to batch JSON config (mutually exclusive with direct SMILES) |
-| `--model` | `clari-m` | Model name (`clari-m`, `clari-l`, `clari-h`) |
-| `--output_dir` | `results/<id>` | Directory to write results |
-| `--batch_size` | auto | Samples per forward pass; auto-scaled to GPU memory if unset |
-| `--num_gpus` | 1 | Number of GPUs (requires `--output_dir`) |
+| `--model` | `clari-h` | Model name (`clari-m`, `clari-l`, `clari-h`) |
+| `--output-dir` | `results/<id>` | Directory to write results |
+| `--batch-size` | auto | Samples per forward pass; auto-scaled to GPU memory if unset |
+| `--num-gpus` | 1 | Number of GPUs (requires `--output-dir`) |
 | `--device` | auto | `cuda`, `mps`, `cpu`, or `cuda:N` |
-| `--n_steps` | 50 | Flow matching steps |
-| `--torch_threads` | 1 | CPU thread count |
+| `--n-steps` | 50 | Flow matching steps |
+| `--torch-threads` | 1 | CPU thread count |
 | `--compile` | off | Enable `torch.compile` (off by default; gives a meaningful speedup on CUDA after cold-start) |
 | `--overwrite` | off | Overwrite existing output directory |
-| `--no_ema` | off | Use raw weights instead of EMA weights |
-| `--no_bf16` | off | Disable bfloat16 (CUDA only) |
-| `--no_pbar` | off | Suppress progress bar |
+| `--no-ema` | off | Use raw weights instead of EMA weights |
+| `--no-bf16` | off | Disable bfloat16 (CUDA only) |
+| `--no-pbar` | off | Suppress progress bar |
+| `--no-export-cifs` | off | Skip automatic CIF export; write only `predictions.parquet` |
 
 ## CLI — ranking
 
@@ -165,7 +171,7 @@ Writes:
 - `results/ethanol/energies.csv` — `sample_idx`, `energies` (UMA energy per structure)
 - `results/ethanol/rankings.csv` — `sample_idx`, `id`, `energies`, `rank` (0-based rank within each `id` group)
 
-Flags: `--batch_size 32`, `--num_gpus 1`, `--torch_threads 1`, `--overwrite`.
+Flags: `--batch-size 32`, `--num-gpus 1`, `--torch-threads 1`, `--overwrite`.
 
 ## CLI — export
 
@@ -174,25 +180,25 @@ Flags: `--batch_size 32`, `--num_gpus 1`, `--torch_threads 1`, `--overwrite`.
 uv run export-cifs results/ethanol
 
 # Top 3 ranked (requires rankings.csv)
-uv run export-cifs results/ethanol --top_k 3
+uv run export-cifs results/ethanol --top-k 3
 
 # Specific sample indices
-uv run export-cifs results/ethanol --sample_idx 0 --sample_idx 2
+uv run export-cifs results/ethanol --sample-idx 0 --sample-idx 2
 
 # Export one request from a batch run
 uv run export-cifs results/batch_run/ethanol
 
 # Custom output directory
-uv run export-cifs results/ethanol --output_dir my_cifs/
+uv run export-cifs results/ethanol --output-dir my_cifs/
 ```
 
-`export-cifs` works with or without `rankings.csv`. Without it, all samples are exported and named by index. With it, filenames include the rank and `--top_k` filtering becomes available.
+`export-cifs` works with or without `rankings.csv`. Without it, all samples are exported and named by index. With it, filenames include the rank and `--top-k` filtering becomes available.
 
 Writes CIFs to `<output_dir>/<id>/`:
 - Without rankings: `sample_000000.cif`
 - With rankings: `rank_0000_sample_000000.cif`
 
-Flags: `--output_dir`, `--rankings_path`, `--top_k`, `--ids` (repeatable), `--sample_idx` (repeatable), `--overwrite`.
+Flags: `--output-dir`, `--rankings-path`, `--top-k`, `--ids` (repeatable), `--sample-idx` (repeatable), `--overwrite`.
 
 ## Python API
 
@@ -227,7 +233,7 @@ sampler.sample(
 - `samples: int = 1`
 - `output_dir` — if set, writes to disk and returns the output `Path`; predictions at `<output_dir>/predictions.parquet`
 
-`ClariSampler` constructor: `checkpoint` (`"clari-m"`, `"clari-l"`, or `"clari-h"`), `device` (default `"auto"`), `use_ema` (default `True`), `use_bf16` (default `True`), `n_steps` (default `50`), `compile` (default `False`), `num_gpus` (default `1`), `filter_clashing` (default `False`; when `True`, drops sampled structures with inter-molecular atom clashes instead of resampling, so fewer than `samples` may be returned — clashes are rare at a high `n_steps` like 50, so few or none are dropped).
+`ClariSampler` constructor: `checkpoint` (`"clari-m"`, `"clari-l"`, or `"clari-h"`; default `"clari-h"`), `device` (default `"auto"`), `use_ema` (default `True`), `use_bf16` (default `True`), `n_steps` (default `50`), `compile` (default `False`), `num_gpus` (default `1`), `filter_clashing` (default `False`; when `True`, drops sampled structures with inter-molecular atom clashes instead of resampling, so fewer than `samples` may be returned — clashes are rare at a high `n_steps` like 50, so few or none are dropped).
 
 ## Ranking and export from Python
 
@@ -260,7 +266,7 @@ export_cifs(crystals, output_dir="my_cifs/", id="ethanol")
 | `config.json` | `clari` | Full run config for reproducibility |
 | `energies.csv` | `rank` | `sample_idx`, `energies` |
 | `rankings.csv` | `rank` | `sample_idx`, `id`, `energies`, `rank` (0-based within id group) |
-| `cifs/<id>/` | `export-cifs` | `.cif` files, named by rank and/or sample index |
+| `cifs/<id>/` | `clari` (default) / `export-cifs` | `.cif` files, named by rank and/or sample index |
 
 ## Operational notes
 

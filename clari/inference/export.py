@@ -22,6 +22,8 @@ def export_cifs(
     id: str | None = None,
 ) -> Path:
     """Export CIF files from a predictions.parquet results file, directory, or list of Crystal objects."""
+    import sys
+
     import polars as pl
 
     from clari.inference.inputs import resolve_predictions_path
@@ -40,7 +42,7 @@ def export_cifs(
         compound_dir.mkdir(parents=True, exist_ok=True)
         for idx, crystal in enumerate(input_path):
             (compound_dir / f"sample_{idx:06d}.cif").write_text(crystal.to_cif())
-        print(f"Exported {len(input_path)} CIFs to {compound_dir}")
+        print(f"Exported {len(input_path)} CIFs to {compound_dir}", file=sys.stderr)
         return compound_dir
 
     predictions_path = resolve_predictions_path(input_path)
@@ -88,7 +90,7 @@ def export_cifs(
             raise FileExistsError(f"CIF already exists: {path}. Pass --overwrite.")
         path.write_text(row[CIF_COLUMN])
 
-    print(f"Exported {len(df)} CIFs to {output_dir}")
+    print(f"Exported {len(df)} CIFs to {output_dir}", file=sys.stderr)
     return output_dir
 
 
@@ -119,11 +121,11 @@ def main() -> None:
         description="Export CIF files from CLARI predictions.parquet, optionally using rankings.csv."
     )
     parser.add_argument("input_path", type=Path)
-    parser.add_argument("--output_dir", type=Path, default=None)
-    parser.add_argument("--rankings_path", type=Path, default=None)
-    parser.add_argument("--top_k", type=int, default=None)
+    parser.add_argument("--output-dir", type=Path, default=None)
+    parser.add_argument("--rankings-path", type=Path, default=None)
+    parser.add_argument("--top-k", type=int, default=None)
     parser.add_argument("--ids", action="append", default=None)
-    parser.add_argument("--sample_idx", action="append", default=None)
+    parser.add_argument("--sample-idx", action="append", default=None)
     parser.add_argument("--overwrite", action="store_true")
     args = parser.parse_args()
     if args.sample_idx is not None:

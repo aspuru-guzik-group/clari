@@ -94,9 +94,9 @@ def rank(
 def main() -> None:
     parser = ArgumentParser(description="Rank generated predictions using FairChem UMA energies.")
     parser.add_argument("input_path", type=Path)
-    parser.add_argument("--batch_size", type=int, default=32)
-    parser.add_argument("--num_gpus", type=int, default=1)
-    parser.add_argument("--torch_threads", type=int, default=1)
+    parser.add_argument("--batch-size", type=int, default=32)
+    parser.add_argument("--num-gpus", type=int, default=1)
+    parser.add_argument("--torch-threads", type=int, default=1)
     parser.add_argument("--overwrite", action="store_true")
     args = parser.parse_args()
     rank(**vars(args))

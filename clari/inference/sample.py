@@ -85,6 +85,7 @@ def validate_requests(requests: list[SampleRequest]) -> None:
 def build_run_config(
     requests: list[SampleRequest],
     model: str,
+    checkpoint: str,
     device: str,
     num_gpus: int,
     batch_size: int | None,
@@ -96,6 +97,7 @@ def build_run_config(
 ) -> dict[str, Any]:
     return {
         "model": model,
+        "checkpoint": checkpoint,
         "device": device,
         "num_gpus": num_gpus,
         "batch_size": batch_size,
@@ -204,6 +206,7 @@ class ClariSampler:
     ):
         if n_steps is not None and n_steps <= 0:
             raise ValueError(f"n_steps must be positive, got {n_steps}")
+        requested_checkpoint = str(checkpoint)
         checkpoint = resolve_checkpoint(checkpoint)
         resolved_device = resolve_device(device)
         torch.set_num_threads(torch_threads)
@@ -214,7 +217,8 @@ class ClariSampler:
         self._lit: LitDiT | None = None
         self._checkpoint = checkpoint
         self.device = resolved_device
-        self.model = str(checkpoint)
+        self.model = requested_checkpoint
+        self.checkpoint = str(checkpoint)
         self.use_ema = use_ema
         self.use_bf16 = use_bf16 and resolved_device.type == "cuda"
         self.n_steps = n_steps
@@ -491,6 +495,7 @@ def write_run_config(
             build_run_config(
                 requests,
                 sampler.model,
+                sampler.checkpoint,
                 str(sampler.device),
                 num_gpus,
                 batch_size,
