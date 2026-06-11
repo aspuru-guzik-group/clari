@@ -1,9 +1,9 @@
 # /// script
 # requires-python = ">=3.11"
 # dependencies = [
-#     "clari==0.1.1",
+#     "clari",
 #     "marimo",
-#     "py3dmol==2.5.5",
+#     "py3dmol",
 #     "anywidget",
 #     "traitlets",
 #     "rdkit",
@@ -62,13 +62,9 @@ def _():
         ClariSampler,
         anywidget,
         base64,
-        draw_crystal,
-        draw_crystal_trajectory_from_batch,
         io,
         mo,
-        py3Dmol,
         sample_trajectory,
-        torch,
         traitlets,
         zipfile,
     )
