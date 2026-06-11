@@ -1,9 +1,9 @@
 # /// script
 # requires-python = ">=3.11"
 # dependencies = [
-#     "clari",
+#     "clari==0.1.1",
 #     "marimo",
-#     "py3dmol",
+#     "py3dmol==2.5.5",
 #     "anywidget",
 #     "traitlets",
 #     "rdkit",
@@ -12,8 +12,23 @@
 
 import marimo
 
-__generated_with = "0.20.4"
-app = marimo.App(width="medium")
+__generated_with = "0.23.9"
+app = marimo.App(
+    width="medium",
+    css_file="/usr/local/_marimo/custom.css",
+    auto_download=["html"],
+)
+
+
+@app.cell(hide_code=True)
+def _():
+    import subprocess, sys
+    subprocess.run(
+        [sys.executable, "-m", "pip", "install", "clari", "py3dmol", "anywidget", "traitlets", "rdkit"],
+        check=True,
+    )
+    deps_ready = True
+    return
 
 
 @app.cell
@@ -51,34 +66,34 @@ def _():
 @app.cell
 def _(mo):
     mo.md("""
-        <style>
-        :root { --ink: #1d2433; --muted: #657188; --line: #d7dee8; --panel: #f7f9fc; --accent: #1f8a70; }
-        .hero {
-            padding: 28px 30px 24px; border: 1px solid var(--line); border-radius: 8px;
-            background: linear-gradient(135deg, rgba(31,138,112,.12), rgba(214,107,53,.08)), var(--panel);
-        }
-        .hero h1 { color: var(--ink); font-size: 1.95rem; line-height: 1.12; margin: 0 0 10px; }
-        .hero p { color: var(--muted); font-size: 1rem; line-height: 1.55; margin: 0; max-width: 720px; }
-        .authors { color: var(--muted); font-size: .95rem; margin: 10px 0 14px; }
-        .badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 16px; align-items: center; }
-        .badges img { display: block; height: 20px; margin: 0; }
-        .dl { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; color: var(--ink); display: inline-block; width: auto; font-size: .9rem; font-weight: 500; line-height: 1; padding: 8px 12px; text-decoration: none; }
-        .dl:hover { background: #eef2f8; }
-        .step { color: var(--ink); font-weight: 700; font-size: 1.05rem; margin: 4px 0; }
-        .molcard { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; background: #fff; }
-        .smiles { font-family: ui-monospace, monospace; font-size: 11px; color: var(--muted); background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 6px; padding: 4px 8px; word-break: break-all; max-height: 46px; overflow-y: auto; }
-        .candi { border: 1px solid var(--line); border-radius: 10px; padding: 10px; text-align: center; background: #fff; }
-        </style>
-        <section class="hero">
-            <h1>Fast Organic Crystal Structure Prediction with Unit Cell Flow Matching</h1>
-            <div class="authors">Alston Lo, Luka Mucko, Austin H. Cheng, Andy Cai, Alastair J. A. Price, Wojciech Matusik, and Alán Aspuru-Guzik</div>
-            <p>Draw molecular components in the Ketcher board, add them to the asymmetric unit, set how many copies of each, then sample candidate crystal packings and inspect / download their CIFs.</p>
-            <div class="badges">
-                <a href="https://arxiv.org/abs/2606.03199"><img src="https://img.shields.io/badge/arXiv-2606.03199-b31b1b.svg" /></a>
-                <a href="https://github.com/aspuru-guzik-group/clari"><img src="https://img.shields.io/badge/GitHub-aspuru--guzik--group%2Fclari-24292f.svg?logo=github" /></a>
-                <a href="https://huggingface.co/the-matter-lab/clari"><img src="https://img.shields.io/badge/Hugging%20Face-Data-blue" /></a>
-            </div>
-        </section>
+    <style>
+    :root { --ink: #1d2433; --muted: #657188; --line: #d7dee8; --panel: #f7f9fc; --accent: #1f8a70; }
+    .hero {
+        padding: 28px 30px 24px; border: 1px solid var(--line); border-radius: 8px;
+        background: linear-gradient(135deg, rgba(31,138,112,.12), rgba(214,107,53,.08)), var(--panel);
+    }
+    .hero h1 { color: var(--ink); font-size: 1.95rem; line-height: 1.12; margin: 0 0 10px; }
+    .hero p { color: var(--muted); font-size: 1rem; line-height: 1.55; margin: 0; max-width: 720px; }
+    .authors { color: var(--muted); font-size: .95rem; margin: 10px 0 14px; }
+    .badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 16px; align-items: center; }
+    .badges img { display: block; height: 20px; margin: 0; }
+    .dl { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; color: var(--ink); display: inline-block; width: auto; font-size: .9rem; font-weight: 500; line-height: 1; padding: 8px 12px; text-decoration: none; }
+    .dl:hover { background: #eef2f8; }
+    .step { color: var(--ink); font-weight: 700; font-size: 1.05rem; margin: 4px 0; }
+    .molcard { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; background: #fff; }
+    .smiles { font-family: ui-monospace, monospace; font-size: 11px; color: var(--muted); background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 6px; padding: 4px 8px; word-break: break-all; max-height: 46px; overflow-y: auto; }
+    .candi { border: 1px solid var(--line); border-radius: 10px; padding: 10px; text-align: center; background: #fff; }
+    </style>
+    <section class="hero">
+        <h1>Fast Organic Crystal Structure Prediction with Unit Cell Flow Matching</h1>
+        <div class="authors">Alston Lo, Luka Mucko, Austin H. Cheng, Andy Cai, Alastair J. A. Price, Wojciech Matusik, and Alán Aspuru-Guzik</div>
+        <p>Draw molecular components in the Ketcher board, add them to the asymmetric unit, set how many copies of each, then sample candidate crystal packings and inspect and download their CIFs.</p>
+        <div class="badges">
+            <a href="https://arxiv.org/abs/2606.03199"><img src="https://img.shields.io/badge/arXiv-2606.03199-b31b1b.svg" /></a>
+            <a href="https://github.com/aspuru-guzik-group/clari"><img src="https://img.shields.io/badge/GitHub-aspuru--guzik--group%2Fclari-24292f.svg?logo=github" /></a>
+            <a href="https://huggingface.co/the-matter-lab/clari"><img src="https://img.shields.io/badge/Hugging%20Face-Data-blue" /></a>
+        </div>
+    </section>
     """)
     return
 
@@ -166,26 +181,23 @@ def _(mo):
     return filter_clashing, model, n_steps, run, samples, z
 
 
-@app.cell
-def _(mo):
-    def mol_svg(smi, size=88):
-        from rdkit import Chem
-        from rdkit.Chem.Draw import rdMolDraw2D
+@app.function
+def mol_svg(smi, size=88):
+    from rdkit import Chem
+    from rdkit.Chem.Draw import rdMolDraw2D
 
-        m = Chem.MolFromSmiles(smi) if smi else None
-        if m is None:
-            return "<div style='color:#94a3b8;font-size:11px'>no preview</div>"
-        d = rdMolDraw2D.MolDraw2DSVG(size, size)
-        d.drawOptions().clearBackground = False
-        d.DrawMolecule(m)
-        d.FinishDrawing()
-        return d.GetDrawingText()
-
-    return (mol_svg,)
+    m = Chem.MolFromSmiles(smi) if smi else None
+    if m is None:
+        return "<div style='color:#94a3b8;font-size:11px'>no preview</div>"
+    d = rdMolDraw2D.MolDraw2DSVG(size, size)
+    d.drawOptions().clearBackground = False
+    d.DrawMolecule(m)
+    d.FinishDrawing()
+    return d.GetDrawingText()
 
 
 @app.cell
-def _(get_comps, ketcher, mo, mol_svg, set_comps):
+def _(get_comps, ketcher, mo, set_comps):
     comps = get_comps()
     copies_inputs = mo.ui.array(
         [mo.ui.number(start=1, stop=16, step=1, value=c["copies"]) for c in comps]
@@ -293,7 +305,7 @@ def _(get_comps, ketcher, mo, mol_svg, set_comps):
 
 
 @app.cell
-def _(filter_clashing, model, mo, n_steps, run, samples, z):
+def _(filter_clashing, mo, model, n_steps, run, samples, z):
     def _field(lbl, el):
         return mo.vstack(
             [mo.md(f"<span style='font-size:.82rem;font-weight:600;color:#657188'>{lbl}</span>"), el],
