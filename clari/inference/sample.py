@@ -745,8 +745,8 @@ def sample_trajectory(
     template = request_to_crystal(request)
 
     results: list[CrystalTrajectory] = []
+    resample_rounds = 0
     while len(results) < samples:
-        resample_rounds = 0
         need = samples - len(results)
         batch = Crystal.collate([template] * need).to(sampler.device)
         with torch.autocast(
@@ -775,6 +775,8 @@ def sample_trajectory(
                 if resample_rounds > MAX_CLASH_RESAMPLE_ROUNDS:
                     results.extend(batch_results)
                     break
+            else:
+                resample_rounds = 0
         results.extend(batch_results)
         if not filter_clashing:
             break
