@@ -54,7 +54,14 @@ def main(argv: list[str] | None = None) -> int:
         else:
             args["output_dir"] = f"results/{requests[0].id}"
 
-    from clari.inference.sample import ClariSampler, sample
+    from clari.inference.sample import (
+        ClariSampler,
+        sample,
+        sample_batch_to_directories,
+        validate_requests,
+    )
+
+    validate_requests(requests)
 
     use_ema = False if args["no_ema"] else bool(options.get("use_ema", True))
     use_bf16 = False if args["no_bf16"] else bool(options.get("use_bf16", True))
@@ -74,18 +81,18 @@ def main(argv: list[str] | None = None) -> int:
             num_gpus=args["num_gpus"],
             seed=args["seed"],
         )
-        results = []
-        for request in requests:
-            result = sampler.sample(
-                request,
-                output_dir=base_dir / str(request.id),
-                batch_size=args["batch_size"],
-                num_gpus=args["num_gpus"],
-                overwrite=args["overwrite"],
-                pbar=pbar,
-                seed=args["seed"],
-            )
-            results.append(result)
+        output_dirs = [base_dir / str(request.id) for request in requests]
+        results = sample_batch_to_directories(
+            sampler,
+            requests=requests,
+            output_dirs=output_dirs,
+            base_dir=base_dir,
+            batch_size=args["batch_size"],
+            num_gpus=args["num_gpus"],
+            overwrite=args["overwrite"],
+            pbar=pbar,
+            seed=args["seed"],
+        )
         (base_dir / "manifest.json").write_text(
             json.dumps(
                 {

@@ -138,7 +138,7 @@ results/batch_run/
 | `--smiles` | — | SMILES string (repeatable; synonym of positional form) |
 | `--copies` | 4 | Molecules per unit cell (repeatable, matched by index to `--smiles`) |
 | `--samples` | 1 | Number of candidate structures to generate |
-| `--id` | auto | Labels every row in `predictions.parquet` and becomes the CIF subdirectory name. Auto-generated from SMILES if omitted. Valid characters: letters, digits, `.`, `_`, `-`; others are replaced with `_`. Max 80 chars. |
+| `--id` | auto | Labels every row in `predictions.parquet` and becomes the CIF subdirectory name. Prefer setting it explicitly — the auto-generated SMILES-based name is cryptic and can collide. Valid characters: letters, digits, `.`, `_`, `-`; others are replaced with `_`. Max 80 chars. |
 | `--config` | — | Path to batch JSON config (mutually exclusive with direct SMILES) |
 | `--model` | `clari-m` | Model name (`clari-m`, `clari-l`, `clari-h`) |
 | `--output_dir` | `results/<id>` | Directory to write results |

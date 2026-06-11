@@ -57,11 +57,29 @@ def resolve_device(device: str | torch.device | None) -> torch.device:
 def request_to_crystal(request: SampleRequest) -> Crystal:
     components = request_components(request)
     # AddHs for plain SMILES; .mol files and molblocks already carry explicit hydrogens.
+    # Guard the filesystem stat with a length check (mirrors Crystal.from_smiles): a long
+    # SMILES string would otherwise raise OSError("File name too long") from Path.is_file().
     add_hs = [
-        not (s.lower().endswith(".mol") or "M  END" in s or Path(s).is_file())
+        not (s.lower().endswith(".mol") or "M  END" in s or (len(s) < 1024 and Path(s).is_file()))
         for s, _ in components
     ]
     return Crystal.from_smiles(components, csd_id=request.id, add_hs=add_hs)
+
+
+def validate_requests(requests: list[SampleRequest]) -> None:
+    """Parse every request's SMILES up front so bad input fails fast.
+
+    Runs before the (slow) checkpoint download and any GPU work, and — for batch
+    runs — before any request has sampled, so a single bad SMILES can't leave
+    orphaned, un-manifested output behind.
+    """
+    for request in requests:
+        if request.samples < 1:
+            raise ValueError(f"Request {request.id!r}: samples must be >= 1, got {request.samples}")
+        try:
+            request_to_crystal(request)
+        except Exception as exc:
+            raise ValueError(f"Request {request.id!r}: {exc}") from exc
 
 
 def build_run_config(
@@ -190,7 +208,11 @@ class ClariSampler:
         resolved_device = resolve_device(device)
         torch.set_num_threads(torch_threads)
         torch.set_float32_matmul_precision("high")
-        self.lit = load_lit(checkpoint, resolved_device, use_ema, n_steps, compile)
+        # The model is loaded lazily on first use (see the `lit` property). This keeps the
+        # main process weight-free in the multi-GPU path, where it only supplies metadata
+        # and the per-GPU workers each load their own copy.
+        self._lit: LitDiT | None = None
+        self._checkpoint = checkpoint
         self.device = resolved_device
         self.model = str(checkpoint)
         self.use_ema = use_ema
@@ -201,6 +223,14 @@ class ClariSampler:
         self.num_gpus = num_gpus
         self.seed = seed
         self.filter_clashing = filter_clashing
+
+    @property
+    def lit(self) -> LitDiT:
+        if self._lit is None:
+            self._lit = load_lit(
+                self._checkpoint, self.device, self.use_ema, self.n_steps, self.compile
+            )
+        return self._lit
 
     @torch.inference_mode()
     def sample_batch(self, crystal: Crystal, count: int) -> list[Crystal]:
@@ -442,23 +472,14 @@ def gpu_worker(
         sys.exit(1)
 
 
-def sample_to_directory(
-    sampler: ClariSampler,
-    *,
-    requests: list[SampleRequest],
+def write_run_config(
     output_dir: Path,
-    batch_size: int | None,
+    requests: list[SampleRequest],
+    sampler: ClariSampler,
     num_gpus: int,
+    batch_size: int | None,
     overwrite: bool,
-    pbar: bool,
-    seed: int | None = None,
-) -> Path:
-    if num_gpus <= 0:
-        raise ValueError(f"num_gpus must be positive, got {num_gpus}")
-    if not requests:
-        raise ValueError("At least one request is required.")
-    prepare_output_dir(output_dir, overwrite)
-    output_dir.mkdir(parents=True, exist_ok=True)
+) -> None:
     (output_dir / "config.json").write_text(
         json.dumps(
             build_run_config(
@@ -477,53 +498,159 @@ def sample_to_directory(
         )
         + "\n"
     )
+
+
+def run_chunks_on_gpus(
+    sampler: ClariSampler,
+    requests: list[SampleRequest],
+    chunks: list[dict[str, int]],
+    shards_dir: Path,
+    num_gpus: int,
+    pbar: bool,
+    seed: int | None,
+) -> None:
+    """Sample every chunk into `shards_dir`, on one GPU or fanned out across many."""
+    if num_gpus == 1:
+        run_chunks(sampler, requests, chunks, shards_dir, pbar=pbar)
+        return
+    if not torch.cuda.is_available():
+        raise RuntimeError(f"Requested {num_gpus} GPUs, but CUDA is not available")
+    if torch.cuda.device_count() < num_gpus:
+        raise RuntimeError(f"Requested {num_gpus} GPUs, found {torch.cuda.device_count()}")
+    ctx = mp.get_context("spawn")
+    error_queue = ctx.Queue()
+    procs = []
+    for rank in range(num_gpus):
+        proc = ctx.Process(
+            target=gpu_worker,
+            args=(
+                rank,
+                sampler.model,
+                requests,
+                chunks[rank::num_gpus],
+                str(shards_dir),
+                sampler.use_ema,
+                sampler.use_bf16,
+                sampler.n_steps,
+                sampler.compile,
+                sampler.torch_threads,
+                error_queue,
+                seed,
+                sampler.filter_clashing,
+            ),
+        )
+        proc.start()
+        procs.append(proc)
+    for proc in procs:
+        proc.join()
+    errors = []
+    while not error_queue.empty():
+        errors.append(error_queue.get_nowait())
+    if errors:
+        msgs = "\n".join(f"GPU {r}:\n{tb}" for r, tb in sorted(errors))
+        raise RuntimeError(f"Sampling worker(s) failed:\n{msgs}")
+    elif any(proc.exitcode != 0 for proc in procs):
+        raise RuntimeError("A sampling worker failed (no traceback captured).")
+
+
+def merge_request_shards(
+    shards_dir: Path,
+    shard_indices: list[int],
+    predictions_path: Path,
+    sample_idx_offset: int,
+) -> None:
+    """Merge a request's own shards into its parquet, re-basing sample_idx to 0."""
+    paths = [shards_dir / f"shard_{shard_index:06d}.parquet" for shard_index in shard_indices]
+    paths = [path for path in paths if path.is_file()]
+    if not paths:
+        # No shards (e.g. samples == 0): write an empty, well-typed predictions file.
+        pl.DataFrame(schema={"id": pl.String, "sample_idx": pl.Int64, "cif": pl.String}).write_parquet(
+            predictions_path
+        )
+        return
+    pl.concat([pl.read_parquet(path) for path in paths], how="vertical").with_columns(
+        (pl.col("sample_idx") - sample_idx_offset).alias("sample_idx")
+    ).sort("sample_idx").write_parquet(predictions_path)
+
+
+def sample_to_directory(
+    sampler: ClariSampler,
+    *,
+    requests: list[SampleRequest],
+    output_dir: Path,
+    batch_size: int | None,
+    num_gpus: int,
+    overwrite: bool,
+    pbar: bool,
+    seed: int | None = None,
+) -> Path:
+    if num_gpus <= 0:
+        raise ValueError(f"num_gpus must be positive, got {num_gpus}")
+    if not requests:
+        raise ValueError("At least one request is required.")
+    prepare_output_dir(output_dir, overwrite)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    write_run_config(output_dir, requests, sampler, num_gpus, batch_size, overwrite)
     chunks = build_chunks(requests, batch_size, sampler.device)
     shards_dir = output_dir / ".shards"
     shards_dir.mkdir(exist_ok=True)
-    if num_gpus == 1:
-        run_chunks(sampler, requests, chunks, shards_dir, pbar=pbar)
-    else:
-        if not torch.cuda.is_available():
-            raise RuntimeError(f"Requested {num_gpus} GPUs, but CUDA is not available")
-        if torch.cuda.device_count() < num_gpus:
-            raise RuntimeError(f"Requested {num_gpus} GPUs, found {torch.cuda.device_count()}")
-        ctx = mp.get_context("spawn")
-        error_queue = ctx.Queue()
-        procs = []
-        for rank in range(num_gpus):
-            proc = ctx.Process(
-                target=gpu_worker,
-                args=(
-                    rank,
-                    sampler.model,
-                    requests,
-                    chunks[rank::num_gpus],
-                    str(shards_dir),
-                    sampler.use_ema,
-                    sampler.use_bf16,
-                    sampler.n_steps,
-                    sampler.compile,
-                    sampler.torch_threads,
-                    error_queue,
-                    seed,
-                    sampler.filter_clashing,
-                ),
-            )
-            proc.start()
-            procs.append(proc)
-        for proc in procs:
-            proc.join()
-        errors = []
-        while not error_queue.empty():
-            errors.append(error_queue.get_nowait())
-        if errors:
-            msgs = "\n".join(f"GPU {r}:\n{tb}" for r, tb in sorted(errors))
-            raise RuntimeError(f"Sampling worker(s) failed:\n{msgs}")
-        elif any(proc.exitcode != 0 for proc in procs):
-            raise RuntimeError("A sampling worker failed (no traceback captured).")
+    run_chunks_on_gpus(sampler, requests, chunks, shards_dir, num_gpus, pbar, seed)
     merge_shards(shards_dir, output_dir / "predictions.parquet")
     shutil.rmtree(shards_dir)
     return output_dir
+
+
+def sample_batch_to_directories(
+    sampler: ClariSampler,
+    *,
+    requests: list[SampleRequest],
+    output_dirs: list[Path],
+    base_dir: Path,
+    batch_size: int | None,
+    num_gpus: int,
+    overwrite: bool,
+    pbar: bool,
+    seed: int | None = None,
+) -> list[Path]:
+    """Sample many independent requests, each to its own directory, in one dispatch.
+
+    GPU workers spawn once for the whole batch (the model is loaded once per GPU,
+    not once per request) and every chunk lands in a shared shards directory; each
+    request's shards are then merged into its own predictions.parquet.
+    """
+    if num_gpus <= 0:
+        raise ValueError(f"num_gpus must be positive, got {num_gpus}")
+    if not requests:
+        raise ValueError("At least one request is required.")
+    if len(output_dirs) != len(requests):
+        raise ValueError("output_dirs must have one entry per request.")
+    for request, output_dir in zip(requests, output_dirs):
+        prepare_output_dir(output_dir, overwrite)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        write_run_config(output_dir, [request], sampler, num_gpus, batch_size, overwrite)
+
+    chunks = build_chunks(requests, batch_size, sampler.device)
+    shards_dir = base_dir / ".shards"
+    shards_dir.mkdir(parents=True, exist_ok=True)
+    run_chunks_on_gpus(sampler, requests, chunks, shards_dir, num_gpus, pbar, seed)
+
+    # Each request's parquet holds 0-based sample_idx, so subtract its base offset
+    # (the cumulative sample count of earlier requests, == its first global sample_idx).
+    base_offsets: list[int] = []
+    running = 0
+    for request in requests:
+        base_offsets.append(running)
+        running += request.samples
+    for request_index, output_dir in enumerate(output_dirs):
+        shard_indices = [c["shard_index"] for c in chunks if c["request_index"] == request_index]
+        merge_request_shards(
+            shards_dir,
+            shard_indices,
+            output_dir / "predictions.parquet",
+            base_offsets[request_index],
+        )
+    shutil.rmtree(shards_dir)
+    return list(output_dirs)
 
 
 @torch.inference_mode()

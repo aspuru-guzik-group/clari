@@ -63,7 +63,8 @@ uv run clari "CCO" --model clari-h --id ethanol            # pick model, label o
 other): `clari --smiles "CC(=O)Oc1ccccc1C(=O)O" --copies 1 --smiles "O" --copies 3`.
 
 **`--id`** labels the output rows and becomes the CIF subdirectory name;
-auto-generated from SMILES if omitted. **`--output_dir`** defaults to `results/<id>`.
+auto-generated from SMILES if omitted. Prefer setting it explicitly — the
+auto-generated SMILES-based name is cryptic and can collide. **`--output_dir`** defaults to `results/<id>`.
 
 ### Batch via config
 
