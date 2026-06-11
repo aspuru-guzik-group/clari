@@ -15,7 +15,6 @@ from clari.chem import Crystal
 from clari.inference.inputs import (
     SampleRequest,
     make_request,
-    request_components,
     resolve_checkpoint,
 )
 from clari.pipelines.base.lit import LitDiT
@@ -56,7 +55,11 @@ def resolve_device(device: str | torch.device | None) -> torch.device:
 
 
 def request_to_crystal(request: SampleRequest) -> Crystal:
-    components = request_components(request)
+    components = (
+        [(request.smiles, request.copies)]
+        if isinstance(request.smiles, str)
+        else [(str(s), int(c)) for s, c in request.smiles]
+    )
     # AddHs for plain SMILES; .mol files and molblocks already carry explicit hydrogens.
     # Guard the filesystem stat with a length check (mirrors Crystal.from_smiles): a long
     # SMILES string would otherwise raise OSError("File name too long") from Path.is_file().
@@ -81,44 +84,6 @@ def validate_requests(requests: list[SampleRequest]) -> None:
             request_to_crystal(request)
         except Exception as exc:
             raise ValueError(f"Request {request.id!r}: {exc}") from exc
-
-
-def build_run_config(
-    requests: list[SampleRequest],
-    model: str,
-    checkpoint: str,
-    device: str,
-    num_gpus: int,
-    batch_size: int | None,
-    n_steps: int | None,
-    use_ema: bool,
-    use_bf16: bool,
-    compile: bool | None,
-    filter_clashing: bool,
-    overwrite: bool,
-) -> dict[str, Any]:
-    return {
-        "model": model,
-        "checkpoint": checkpoint,
-        "device": device,
-        "num_gpus": num_gpus,
-        "batch_size": batch_size,
-        "n_steps": n_steps,
-        "use_ema": use_ema,
-        "use_bf16": use_bf16,
-        "compile": compile,
-        "filter_clashing": filter_clashing,
-        "overwrite": overwrite,
-        "requests": [
-            {
-                "id": request.id,
-                "smiles": request.smiles,
-                "copies": request.copies,
-                "samples": request.samples,
-            }
-            for request in requests
-        ],
-    }
 
 
 def prepare_output_dir(output_dir: Path, overwrite: bool) -> None:
@@ -252,7 +217,7 @@ class ClariSampler:
                 with torch.autocast(
                     device_type=self.device.type,
                     dtype=torch.bfloat16,
-                    enabled=self.use_bf16 and self.device.type == "cuda",
+                    enabled=self.use_bf16,
                 ):
                     out = self.lit.sampler.sample(
                         self.lit.interface,
@@ -419,12 +384,8 @@ def rows_for_samples(
     return rows
 
 
-def predictions_df(rows: list[dict[str, Any]]) -> pl.DataFrame:
-    return pl.DataFrame(rows, schema=PREDICTION_SCHEMA)
-
-
 def write_shard(shards_dir: Path, shard_index: int, rows: list[dict[str, Any]]) -> None:
-    predictions_df(rows).write_parquet(shards_dir / f"shard_{shard_index:06d}.parquet")
+    pl.DataFrame(rows, schema=PREDICTION_SCHEMA).write_parquet(shards_dir / f"shard_{shard_index:06d}.parquet")
 
 
 def merge_shards(shards_dir: Path, predictions_path: Path) -> None:
@@ -520,20 +481,28 @@ def write_run_config(
 ) -> None:
     (output_dir / "config.json").write_text(
         json.dumps(
-            build_run_config(
-                requests,
-                sampler.model,
-                sampler.checkpoint,
-                str(sampler.device),
-                num_gpus,
-                batch_size,
-                sampler.n_steps,
-                sampler.use_ema,
-                sampler.use_bf16,
-                sampler.compile,
-                sampler.filter_clashing,
-                overwrite,
-            ),
+            {
+                "model": sampler.model,
+                "checkpoint": sampler.checkpoint,
+                "device": str(sampler.device),
+                "num_gpus": num_gpus,
+                "batch_size": batch_size,
+                "n_steps": sampler.n_steps,
+                "use_ema": sampler.use_ema,
+                "use_bf16": sampler.use_bf16,
+                "compile": sampler.compile,
+                "filter_clashing": sampler.filter_clashing,
+                "overwrite": overwrite,
+                "requests": [
+                    {
+                        "id": request.id,
+                        "smiles": request.smiles,
+                        "copies": request.copies,
+                        "samples": request.samples,
+                    }
+                    for request in requests
+                ],
+            },
             indent=2,
         )
         + "\n"
@@ -604,7 +573,7 @@ def merge_request_shards(
     paths = [path for path in paths if path.is_file()]
     if not paths:
         # No shards (e.g. samples == 0): write an empty, well-typed predictions file.
-        predictions_df([]).write_parquet(predictions_path)
+        pl.DataFrame([], schema=PREDICTION_SCHEMA).write_parquet(predictions_path)
         return
     pl.concat([pl.read_parquet(path) for path in paths], how="vertical").with_columns(
         (pl.col("sample_idx") - sample_idx_offset).alias("sample_idx")
@@ -742,7 +711,7 @@ def save(crystals: list[Crystal], output_dir: str | Path, overwrite: bool = Fals
         for i, c in enumerate(crystals)
     ]
     parquet_path = output_dir / "predictions.parquet"
-    predictions_df(rows).write_parquet(parquet_path)
+    pl.DataFrame(rows, schema=PREDICTION_SCHEMA).write_parquet(parquet_path)
     return parquet_path
 
 

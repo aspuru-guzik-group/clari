@@ -103,12 +103,6 @@ def resolve_predictions_path(input_path: str | Path) -> Path:
     return input_path
 
 
-def request_components(request: SampleRequest) -> list[tuple[str, int]]:
-    if isinstance(request.smiles, str):
-        return [(request.smiles, request.copies)]
-    return [(str(smiles), int(copies)) for smiles, copies in request.smiles]
-
-
 def parse_cli_request(
     pos_args: list[str],
     smiles_flags: list[str] | None,
@@ -166,9 +160,6 @@ def parse_cli_request(
     return [make_request(parts, id=request_id, samples=samples)]
 
 
-KNOWN_REQUEST_KEYS = {"id", "smiles", "copies", "samples", "batch_size"}
-
-
 def _warn(message: str) -> None:
     import sys
 
@@ -176,6 +167,7 @@ def _warn(message: str) -> None:
 
 
 def parse_config_requests(config_path: str | Path) -> tuple[list[SampleRequest], dict[str, object]]:
+    known_request_keys = {"id", "smiles", "copies", "samples", "batch_size"}
     config = json.loads(Path(config_path).read_text())
     if not isinstance(config, dict):
         raise ValueError("Config file must contain a JSON object.")
@@ -186,11 +178,11 @@ def parse_config_requests(config_path: str | Path) -> tuple[list[SampleRequest],
     for item in items:
         if not isinstance(item, dict):
             raise ValueError(f"Each request must be an object, got {type(item)!r}")
-        unknown = sorted(set(item) - KNOWN_REQUEST_KEYS)
+        unknown = sorted(set(item) - known_request_keys)
         if unknown:
             _warn(
                 f"ignoring unknown request key(s) {unknown}; "
-                f"known keys are {sorted(KNOWN_REQUEST_KEYS)}"
+                f"known keys are {sorted(known_request_keys)}"
             )
         smiles = item.get("smiles")
         valid = isinstance(smiles, str) or (
