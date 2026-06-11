@@ -259,6 +259,11 @@ The exact commands used for to train our ablated and final models can be found i
 from clari.pipelines.utils.metrics import assess_crystals_eval
 ```
 
+## License
+The source code of Clari is released under the MIT License (see [LICENSE](LICENSE)).
+
+However, Clari was trained on data from the Cambridge Structure Database (CSD). Therefore, the model weights are licensed under a [Creative Commons Attribution-NonCommercial 4.0 International License (CC BY-NC 4.0)](https://creativecommons.org/licenses/by-nc/4.0/) (see [LICENSE_MODEL](LICENSE_MODEL)). For commercial use of the model weights, please ensure that you have a proper [CCDC License](https://www.ccdc.cam.ac.uk/support-and-resources/licensing-information/).
+
 ## Citation
 
 ```bibtex
