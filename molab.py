@@ -81,7 +81,14 @@ def _(mo):
     }
     .hero h1 { color: var(--ink); font-size: 1.95rem; line-height: 1.12; margin: 0 0 10px; }
     .hero p { color: var(--muted); font-size: 1rem; line-height: 1.55; margin: 0; max-width: 720px; }
-    .authors { color: var(--muted); font-size: .95rem; margin: 10px 0 14px; }
+    .authors { color: var(--muted); font-size: .95rem; margin: 10px 0 4px; }
+    .authors sup, .contrib sup {
+        font-size: 0.85em;
+        position: relative;
+        top: -0.15em;
+        vertical-align: baseline;
+    }
+    .contrib { color: var(--muted); font-size: 0.8rem; margin: 0 0 14px; opacity: 0.85; }
     .badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 16px; align-items: center; }
     .badges img { display: block; height: 20px; margin: 0; }
     .dl { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; color: var(--ink); display: inline-block; width: auto; font-size: .9rem; font-weight: 500; line-height: 1; padding: 8px 12px; text-decoration: none; }
@@ -93,8 +100,9 @@ def _(mo):
     </style>
     <section class="hero">
         <h1>Fast Organic Crystal Structure Prediction with Unit Cell Flow Matching</h1>
-        <div class="authors">Alston Lo, Luka Mucko, Austin H. Cheng, Andy Cai, Alastair J. A. Price, Wojciech Matusik, and Alán Aspuru-Guzik</div>
-        <p>Draw molecular components in the Ketcher board, add them to the asymmetric unit, set how many copies of each, then sample candidate crystal packings and inspect and download their CIFs.</p>
+        <div class="authors">Alston Lo<sup>*</sup>, Luka Mucko<sup>*</sup>, Austin H. Cheng<sup>*</sup>, Andy Cai, Alastair J. A. Price, Wojciech Matusik, and Alán Aspuru-Guzik</div>
+        <div class="contrib"><sup>*</sup>Equal contribution</div>
+        <p>Draw molecular components in the Ketcher board, add them to the unit cell, set how many copies of each, then sample candidate crystal packings and inspect and download their CIFs.</p>
         <div class="badges">
             <a href="https://arxiv.org/abs/2606.03199"><img src="https://img.shields.io/badge/arXiv-2606.03199-b31b1b.svg" /></a>
             <a href="https://github.com/aspuru-guzik-group/clari"><img src="https://img.shields.io/badge/GitHub-aspuru--guzik--group%2Fclari-24292f.svg?logo=github" /></a>
@@ -226,7 +234,7 @@ def _(ketcher, mo):
         [
             mo.md("<div class='step'>1. Draw a molecular component</div>"),
             mo.md(
-                "<p style='color:#657188;font-size:.92rem'>Sketch a structure below, then add it to the asymmetric unit on the right. Draw and add several components for co-crystals.</p>"
+                "<p style='color:#657188;font-size:.92rem'>Sketch a structure below, then add it to the unit cell on the right. Draw and add several components for co-crystals.</p>"
             ),
             ketcher,
             mo.md(
@@ -240,7 +248,7 @@ def _(ketcher, mo):
 
 @app.cell
 def _(mo):
-    # Each entry is one molecular component of the asymmetric unit.
+    # Each entry is one molecular component of the unit cell.
     get_comps, set_comps = mo.state([], allow_self_loops=True)
     return get_comps, set_comps
 
