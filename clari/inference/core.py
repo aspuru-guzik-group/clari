@@ -24,6 +24,7 @@ def build_parser() -> ArgumentParser:
     parser.add_argument("--torch-threads", type=int, default=1)
     parser.add_argument("--seed", type=int, default=None)
     parser.add_argument("--compile", action="store_true")
+    parser.add_argument("--filter-clashing", action="store_true")
     parser.add_argument("--overwrite", action="store_true")
     parser.add_argument("--no-ema", action="store_true")
     parser.add_argument("--no-bf16", action="store_true")
@@ -92,6 +93,7 @@ def main(argv: list[str] | None = None) -> int:
             compile=args["compile"],
             torch_threads=args["torch_threads"],
             num_gpus=args["num_gpus"],
+            filter_clashing=bool(args["filter_clashing"]),
             seed=args["seed"],
         )
         output_dirs = [base_dir / str(request.id) for request in requests]
@@ -146,6 +148,7 @@ def main(argv: list[str] | None = None) -> int:
         overwrite=args["overwrite"],
         pbar=pbar,
         seed=args["seed"],
+        filter_clashing=bool(args["filter_clashing"]),
     )
     print(result / "predictions.parquet")
     if args["export_cifs"]:

@@ -21,6 +21,7 @@ from clari.inference.inputs import (
 from clari.pipelines.base.lit import LitDiT
 
 H100_REFERENCE_MEMORY_GB = 81.0
+MAX_CLASH_RESAMPLE_ROUNDS = 5
 
 
 def _seed_everything(seed: int) -> None:
@@ -37,8 +38,7 @@ def _seed_everything(seed: int) -> None:
         torch.mps.manual_seed(seed)
 
 
-def _drop_clashes(crystals: list[Crystal]) -> list[Crystal]:
-    # Keep only structures free of inter-molecular clashes (no resampling to top up).
+def _clash_free(crystals: list[Crystal]) -> list[Crystal]:
     from clari.pipelines.utils.metrics import is_clash_free
 
     return [c for c in crystals if is_clash_free(c)]
@@ -93,6 +93,7 @@ def build_run_config(
     use_ema: bool,
     use_bf16: bool,
     compile: bool | None,
+    filter_clashing: bool,
     overwrite: bool,
 ) -> dict[str, Any]:
     return {
@@ -105,6 +106,7 @@ def build_run_config(
         "use_ema": use_ema,
         "use_bf16": use_bf16,
         "compile": compile,
+        "filter_clashing": filter_clashing,
         "overwrite": overwrite,
         "requests": [
             {
@@ -173,7 +175,10 @@ def load_lit(
     lit = LitDiT(**checkpoint["hyper_parameters"])
     if use_ema:
         ema_weights = (checkpoint.get("ema") or {}).get("ema_weights")
-        lit.load_state_dict(ema_weights or checkpoint["state_dict"], strict=False)
+        if ema_weights is not None:
+            lit.load_state_dict(ema_weights, strict=False)
+        else:
+            lit.load_state_dict(checkpoint["state_dict"])
     else:
         lit.load_state_dict(checkpoint["state_dict"])
     if n_steps is not None:
@@ -285,13 +290,31 @@ class ClariSampler:
         produced: list[Crystal] = []
         while len(produced) < target_samples:
             need = min(per_batch, target_samples - len(produced))
-            got = self.sample_batch(crystal, need, pbar="Denoising" if pbar else None)
-            produced.extend(got[:need])
-            per_batch = min(per_batch, len(got))
-            if progress is not None:
-                progress.update(min(len(got), need))
-        result = produced[:target_samples]
-        return _drop_clashes(result) if self.filter_clashing else result
+            chunk: list[Crystal] = []
+            resample_rounds = 0
+            no_progress = False
+            while len(chunk) < need:
+                missing = need - len(chunk)
+                got = self.sample_batch(crystal, missing, pbar="Denoising" if pbar else None)
+                if not got:
+                    no_progress = True
+                    break
+                accepted = _clash_free(got) if self.filter_clashing else got
+                chunk.extend(accepted[:missing])
+                if len(got) < missing:
+                    per_batch = max(1, min(per_batch, len(got)))
+                if progress is not None:
+                    progress.update(min(len(accepted), missing))
+                if not self.filter_clashing:
+                    break
+                if len(accepted) < len(got):
+                    resample_rounds += 1
+                    if resample_rounds > MAX_CLASH_RESAMPLE_ROUNDS:
+                        break
+            produced.extend(chunk)
+            if no_progress or (self.filter_clashing and len(chunk) < need):
+                break
+        return produced[:target_samples]
 
     @torch.inference_mode()
     def sample(
@@ -503,6 +526,7 @@ def write_run_config(
                 sampler.use_ema,
                 sampler.use_bf16,
                 sampler.compile,
+                sampler.filter_clashing,
                 overwrite,
             ),
             indent=2,
@@ -681,6 +705,7 @@ def sample(
     overwrite: bool = False,
     pbar: bool = True,
     seed: int | None = None,
+    filter_clashing: bool = False,
 ) -> list[Crystal] | Path:
     sampler = ClariSampler(
         model,
@@ -691,6 +716,7 @@ def sample(
         compile=compile,
         torch_threads=torch_threads,
         num_gpus=num_gpus,
+        filter_clashing=filter_clashing,
         seed=seed,
     )
     return sampler.sample(
@@ -743,33 +769,38 @@ def sample_trajectory(
     """Demo-only: sample crystal structures and return their full diffusion trajectories."""
     request = make_request(smiles, id=id, copies=copies, samples=samples)
     template = request_to_crystal(request)
-    batch = Crystal.collate([template] * samples).to(sampler.device)
 
-    with torch.autocast(
-        device_type=sampler.device.type,
-        dtype=torch.bfloat16,
-        enabled=sampler.use_bf16,
-    ):
-        traj = sampler.lit.sampler.sample(
-            sampler.lit.interface,
-            sampler.lit.net,
-            batch,
-            pbar="Denoising steps",
-            return_trajectory=True,
-        )
-    traj = traj.cpu()
-
-    results = []
-    for i in range(samples):
-        t = traj[:, i]
-        results.append(
-            CrystalTrajectory(
-                crystal=template.replace(x=t[-1]),
-                trajectory=t,
+    results: list[CrystalTrajectory] = []
+    resample_rounds = 0
+    while len(results) < samples:
+        need = samples - len(results)
+        batch = Crystal.collate([template] * need).to(sampler.device)
+        with torch.autocast(
+            device_type=sampler.device.type,
+            dtype=torch.bfloat16,
+            enabled=sampler.use_bf16,
+        ):
+            traj = sampler.lit.sampler.sample(
+                sampler.lit.interface,
+                sampler.lit.net,
+                batch,
+                pbar="Denoising steps",
+                return_trajectory=True,
             )
-        )
-    if filter_clashing:
-        from clari.pipelines.utils.metrics import is_clash_free
-
-        results = [r for r in results if is_clash_free(r.crystal)]
-    return results
+        traj = traj.cpu()
+        batch_results = [
+            CrystalTrajectory(crystal=template.replace(x=traj[:, i][-1]), trajectory=traj[:, i])
+            for i in range(need)
+        ]
+        if filter_clashing:
+            from clari.pipelines.utils.metrics import is_clash_free
+            batch_results = [r for r in batch_results if is_clash_free(r.crystal)]
+            if len(batch_results) < need:
+                resample_rounds += 1
+                if resample_rounds > MAX_CLASH_RESAMPLE_ROUNDS:
+                    results.extend(batch_results)
+                    break
+        results.extend(batch_results)
+        if not filter_clashing:
+            break
+    return results[:samples]

@@ -94,7 +94,7 @@ uv run clari --config batch.json
 }
 ```
 
-Top-level keys (all optional): `model`, `output_dir`, `use_ema`, `use_bf16`, `pbar`.
+Top-level keys (all optional): `model`, `output_dir`, `use_ema`, `use_bf16`, `pbar`, `filter_clashing`.
 Per-request keys: `id`, `smiles`, `copies`, `samples`, `batch_size`.
 
 Batch configs are convenience orchestration for running several independent
@@ -158,8 +158,8 @@ sampler.sample(
 )
 ```
 
-`sample()` kwargs: `id`, `copies` (int or list, default 4), `samples` (default 1), `output_dir`.
-Pass `filter_clashing=True` to the `ClariSampler(...)` constructor to drop sampled structures with atom clashes (no resampling, so fewer than `samples` may be returned — in practice clashes are rare at a high `n_steps` like 50, so few or none are dropped).
+`sample()` kwargs: `id`, `copies` (int or list, default 4), `samples` (default 1), `output_dir`, `filter_clashing`.
+Pass `filter_clashing=True` to the `ClariSampler(...)` constructor or top-level `sample(...)` helper to resample clashing structures up to a small fixed number of rounds; if enough clash-free samples cannot be produced, fewer than `samples` may be returned. The CLI exposes the same behavior with `--filter-clashing`.
 
 ### Rank and export from Python
 

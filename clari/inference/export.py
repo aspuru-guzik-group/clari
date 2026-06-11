@@ -35,11 +35,13 @@ def export_cifs(
             )
         output_dir = Path(output_dir)
         compound_dir = output_dir / _safe_path_part(id or "samples")
-        if compound_dir.exists() and not overwrite:
+        if compound_dir.exists() and overwrite:
+            shutil.rmtree(compound_dir)
+        elif compound_dir.exists():
             raise FileExistsError(
                 f"Output directory already exists: {compound_dir}. Pass --overwrite."
             )
-        compound_dir.mkdir(parents=True, exist_ok=True)
+        compound_dir.mkdir(parents=True)
         for idx, crystal in enumerate(input_path):
             (compound_dir / f"sample_{idx:06d}.cif").write_text(crystal.to_cif())
         print(f"Exported {len(input_path)} CIFs to {compound_dir}", file=sys.stderr)

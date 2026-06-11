@@ -179,6 +179,7 @@ def _(anywidget, traitlets):
 
         function render({ model, el }) {
           const h = model.get("height") || 520;
+          el.style.height = h + "px";
           const box = document.createElement("div");
           box.style.cssText = `position:relative;width:100%;height:${h}px;border:1px solid #d7dee8;border-radius:8px;overflow:hidden;background:#fff;`;
           el.appendChild(box);
@@ -200,6 +201,8 @@ def _(anywidget, traitlets):
             });
 
             viewer.zoomTo();
+            const zoom = model.get("zoom") || 1.0;
+            if (zoom !== 1.0) viewer.zoom(zoom);
             viewer.render();
             if (model.get("animate")) {
               viewer.animate({ loop: "forward", interval: model.get("interval") || 120 });
@@ -214,6 +217,7 @@ def _(anywidget, traitlets):
         animate = traitlets.Bool(False).tag(sync=True)
         interval = traitlets.Float(120.0).tag(sync=True)
         height = traitlets.Int(520).tag(sync=True)
+        zoom = traitlets.Float(1.0).tag(sync=True)
 
     return (Mol3DWidget,)
 
@@ -449,9 +453,7 @@ def _(
         _model_ids = {"Clari Medium": "clari-m", "Clari Large": "clari-l", "Clari Huge": "clari-h"}
         _comps = get_comps()
         _smiles = [c["smiles"] for c in _comps if c["smiles"].strip()]
-        _copies = [
-            int(copies_inputs[i].value) for i, c in enumerate(_comps) if c["smiles"].strip()
-        ]
+        _copies = [int(copies_inputs[i].value) for i, c in enumerate(_comps) if c["smiles"].strip()]
         if _smiles:
             import traceback
 
@@ -465,13 +467,16 @@ def _(
 
             class MarimoTqdm(tqdm.tqdm):
                 def __init__(self, *args, **kwargs):
-                    # Save original disable flag, and force disable inside standard tqdm
-                    # to prevent it from writing to terminal
+                    import io
+
                     orig_disable = kwargs.get("disable", False)
-                    kwargs["disable"] = True
+                    # Redirect tqdm output to a sink so it never writes to terminal,
+                    # but let it initialize fully (disable=True skips most __init__ attrs)
+                    kwargs["file"] = io.StringIO()
+                    kwargs.pop("disable", None)
                     super().__init__(*args, **kwargs)
                     self.disable = orig_disable
-                    
+
                     self.pbar_ctx = None
                     self.pbar = None
                     if not self.disable:
@@ -619,7 +624,7 @@ def _(
     zipfile,
 ):
     _idx = min(get_sel(), len(crystals) - 1)
-    _h = 520
+    _h = 540
     _crystal = crystals[_idx].wrapped(mode="com", bounds=(-0.5, 0.5))
 
     # Zip of every candidate CIF.
@@ -719,6 +724,7 @@ def _(
             animate=True,
             interval=_interval,
             height=_h,
+            zoom=1.5,
         )
     )
 
@@ -730,12 +736,9 @@ def _(
             mo.md(
                 f"<p style='color:#657188;font-size:.9rem'>{sampled_smiles} · candidate {_idx + 1} of {len(crystals)}</p>"
             ),
-            mo.accordion(
-                {
-                    "Sampling trajectory": _traj_viewer,
-                    "CIF text": mo.md(f"```cif\n{_cif}\n```"),
-                }
-            ),
+            mo.md("**Sampling trajectory**"),
+            _traj_viewer,
+            mo.accordion({"CIF text": mo.md(f"```cif\n{_cif}\n```")}),
         ],
         gap=0.75,
     )

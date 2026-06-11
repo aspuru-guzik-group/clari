@@ -1,6 +1,6 @@
 [project]
 name = "clari"
-version = "0.1.1"
+version = "0.1.2"
 description = "Fast Organic Crystal Structure Prediction with Unit Cell Flow Matching"
 requires-python = ">=3.11"
 license = "CC-BY-NC-4.0"
