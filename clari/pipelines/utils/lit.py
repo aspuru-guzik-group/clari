@@ -1,4 +1,5 @@
 import numpy as np
+
 try:
     import py3Dmol
 except ImportError:

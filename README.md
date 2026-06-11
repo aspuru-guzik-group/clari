@@ -35,11 +35,16 @@ uv sync
 
 The workflow has three steps:
 
-1. `clari` — sample candidate crystal structures → `predictions.parquet`
+1. `clari` — sample candidate crystal structures → `predictions.parquet` (+ `.cif` files by default)
 2. `rank` — score with FairChem UMA energy → `rankings.csv`
-3. `export-cifs` — write `.cif` files to disk
+3. `export-cifs` — re-export `.cif` files from saved samples (e.g. a ranked subset)
 
-Models (`clari-m`, `clari-l`, `clari-h`) download automatically from HuggingFace on first use.
+`clari` writes `.cif` files automatically after sampling; pass `--no-export-cifs`
+to write only `predictions.parquet`.
+
+Models (`clari-m`, `clari-l`, `clari-h`) download automatically from HuggingFace on
+first use. The default is `clari-h` (highest quality); pass `--model clari-m` for
+the fastest model.
 
 ### Quickstart
 
@@ -65,7 +70,7 @@ other): `clari --smiles "CC(=O)Oc1ccccc1C(=O)O" --copies 1 --smiles "O" --copies
 
 **`--id`** labels the output rows and becomes the CIF subdirectory name;
 auto-generated from SMILES if omitted. Prefer setting it explicitly — the
-auto-generated SMILES-based name is cryptic and can collide. **`--output_dir`** defaults to `results/<id>`.
+auto-generated SMILES-based name is cryptic and can collide. **`--output-dir`** defaults to `results/<id>`.
 
 ### Batch via config
 
@@ -89,7 +94,7 @@ uv run clari --config batch.json
 }
 ```
 
-Top-level keys (all optional): `model`, `output_dir`, `use_ema`, `use_bf16`, `pbar`.
+Top-level keys (all optional): `model`, `output_dir`, `use_ema`, `use_bf16`, `pbar`, `filter_clashing`.
 Per-request keys: `id`, `smiles`, `copies`, `samples`, `batch_size`.
 
 Batch configs are convenience orchestration for running several independent
@@ -118,12 +123,16 @@ uv run --extra uma rank results/ethanol
 
 ### Export CIFs
 
+`clari` already exports CIFs to `<output_dir>/cifs/<id>/` after sampling (disable
+with `--no-export-cifs`). Use `export-cifs` to re-export later — for example a
+ranked subset once `rank` has produced `rankings.csv`:
+
 ```bash
 uv run export-cifs results/ethanol                         # all samples
-uv run export-cifs results/ethanol --top_k 3               # top 3 ranked (requires rankings.csv)
-uv run export-cifs results/ethanol --sample_idx 0 --sample_idx 2
+uv run export-cifs results/ethanol --top-k 3               # top 3 ranked (requires rankings.csv)
+uv run export-cifs results/ethanol --sample-idx 0 --sample-idx 2
 uv run export-cifs results/batch_run/ethanol               # one request from a batch run
-uv run export-cifs results/ethanol --output_dir my_cifs/
+uv run export-cifs results/ethanol --output-dir my_cifs/
 ```
 
 Filenames: `<id>/sample_000000.cif` without rankings, `<id>/rank_0000_sample_000000.cif` with.
@@ -149,8 +158,8 @@ sampler.sample(
 )
 ```
 
-`sample()` kwargs: `id`, `copies` (int or list, default 4), `samples` (default 1), `output_dir`.
-Pass `filter_clashing=True` to the `ClariSampler(...)` constructor to drop sampled structures with atom clashes (no resampling, so fewer than `samples` may be returned — in practice clashes are rare at a high `n_steps` like 50, so few or none are dropped).
+`sample()` kwargs: `id`, `copies` (int or list, default 4), `samples` (default 1), `output_dir`, `filter_clashing`.
+Pass `filter_clashing=True` to the `ClariSampler(...)` constructor or top-level `sample(...)` helper to discard clashing structures and resample replacements.
 
 ### Rank and export from Python
 
@@ -245,7 +254,7 @@ uv run collision <experiment_dir>
 uv run compute-energies <experiment_dir>
 
 # 4. COMPACK packing similarity (writes compack.csv, isolated uv script env)
-uv run -s clari/evaluation/compack.py <experiment_dir> --num_processes n
+uv run -s clari/evaluation/compack.py <experiment_dir> --num-processes n
 
 # 5. Summary table (SolC per subset, all k)
 uv run summarize <experiment_dir>

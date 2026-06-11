@@ -15,12 +15,16 @@ from clari.chem import Crystal
 from clari.inference.inputs import (
     SampleRequest,
     make_request,
-    request_components,
     resolve_checkpoint,
 )
 from clari.pipelines.base.lit import LitDiT
 
 H100_REFERENCE_MEMORY_GB = 81.0
+# Max sampling rounds when clash filtering is on: an initial draw plus resamples that
+# top up rejected (clashing) structures. Each draw is sized from the observed clash-free
+# yield, so a few rounds fill the request; after this many we return whatever passed.
+MAX_RESAMPLE_ROUNDS = 5
+PREDICTION_SCHEMA = {"id": pl.String, "sample_idx": pl.Int64, "cif": pl.String}
 
 
 def _seed_everything(seed: int) -> None:
@@ -37,8 +41,7 @@ def _seed_everything(seed: int) -> None:
         torch.mps.manual_seed(seed)
 
 
-def _drop_clashes(crystals: list[Crystal]) -> list[Crystal]:
-    # Keep only structures free of inter-molecular clashes (no resampling to top up).
+def _clash_free(crystals: list[Crystal]) -> list[Crystal]:
     from clari.pipelines.utils.metrics import is_clash_free
 
     return [c for c in crystals if is_clash_free(c)]
@@ -55,7 +58,11 @@ def resolve_device(device: str | torch.device | None) -> torch.device:
 
 
 def request_to_crystal(request: SampleRequest) -> Crystal:
-    components = request_components(request)
+    components = (
+        [(request.smiles, request.copies)]
+        if isinstance(request.smiles, str)
+        else [(str(s), int(c)) for s, c in request.smiles]
+    )
     # AddHs for plain SMILES; .mol files and molblocks already carry explicit hydrogens.
     # Guard the filesystem stat with a length check (mirrors Crystal.from_smiles): a long
     # SMILES string would otherwise raise OSError("File name too long") from Path.is_file().
@@ -80,40 +87,6 @@ def validate_requests(requests: list[SampleRequest]) -> None:
             request_to_crystal(request)
         except Exception as exc:
             raise ValueError(f"Request {request.id!r}: {exc}") from exc
-
-
-def build_run_config(
-    requests: list[SampleRequest],
-    model: str,
-    device: str,
-    num_gpus: int,
-    batch_size: int | None,
-    n_steps: int | None,
-    use_ema: bool,
-    use_bf16: bool,
-    compile: bool | None,
-    overwrite: bool,
-) -> dict[str, Any]:
-    return {
-        "model": model,
-        "device": device,
-        "num_gpus": num_gpus,
-        "batch_size": batch_size,
-        "n_steps": n_steps,
-        "use_ema": use_ema,
-        "use_bf16": use_bf16,
-        "compile": compile,
-        "overwrite": overwrite,
-        "requests": [
-            {
-                "id": request.id,
-                "smiles": request.smiles,
-                "copies": request.copies,
-                "samples": request.samples,
-            }
-            for request in requests
-        ],
-    }
 
 
 def prepare_output_dir(output_dir: Path, overwrite: bool) -> None:
@@ -171,7 +144,10 @@ def load_lit(
     lit = LitDiT(**checkpoint["hyper_parameters"])
     if use_ema:
         ema_weights = (checkpoint.get("ema") or {}).get("ema_weights")
-        lit.load_state_dict(ema_weights or checkpoint["state_dict"], strict=False)
+        if ema_weights is not None:
+            lit.load_state_dict(ema_weights, strict=False)
+        else:
+            lit.load_state_dict(checkpoint["state_dict"])
     else:
         lit.load_state_dict(checkpoint["state_dict"])
     if n_steps is not None:
@@ -204,6 +180,7 @@ class ClariSampler:
     ):
         if n_steps is not None and n_steps <= 0:
             raise ValueError(f"n_steps must be positive, got {n_steps}")
+        requested_checkpoint = str(checkpoint)
         checkpoint = resolve_checkpoint(checkpoint)
         resolved_device = resolve_device(device)
         torch.set_num_threads(torch_threads)
@@ -214,7 +191,8 @@ class ClariSampler:
         self._lit: LitDiT | None = None
         self._checkpoint = checkpoint
         self.device = resolved_device
-        self.model = str(checkpoint)
+        self.model = requested_checkpoint
+        self.checkpoint = str(checkpoint)
         self.use_ema = use_ema
         self.use_bf16 = use_bf16 and resolved_device.type == "cuda"
         self.n_steps = n_steps
@@ -242,7 +220,7 @@ class ClariSampler:
                 with torch.autocast(
                     device_type=self.device.type,
                     dtype=torch.bfloat16,
-                    enabled=self.use_bf16 and self.device.type == "cuda",
+                    enabled=self.use_bf16,
                 ):
                     out = self.lit.sampler.sample(
                         self.lit.interface,
@@ -275,19 +253,41 @@ class ClariSampler:
     ) -> list[Crystal]:
         crystal = request_to_crystal(request)
         target_samples = request.samples if samples is None else samples
-        per_batch = min(
-            target_samples, auto_batch_size(int(crystal.num_atoms), batch_size, self.device)
-        )
+        per_batch = auto_batch_size(int(crystal.num_atoms), batch_size, self.device)
         produced: list[Crystal] = []
+        total_drawn = 0
+        total_accepted = 0
+        # Resample to top up clash-free structures, sizing each draw from the observed
+        # yield so a round fills the remaining gap in expectation (e.g. at 70% clash-free,
+        # draw gap / 0.7), clamped to the memory-safe batch. Bounded to MAX_RESAMPLE_ROUNDS
+        # rounds. With filtering off this is plain batched sampling with no round cap.
+        rounds = 0
         while len(produced) < target_samples:
-            need = min(per_batch, target_samples - len(produced))
-            got = self.sample_batch(crystal, need, pbar="Denoising" if pbar else None)
-            produced.extend(got[:need])
-            per_batch = min(per_batch, len(got))
+            remaining = target_samples - len(produced)
+            if not self.filter_clashing:
+                want = min(per_batch, remaining)
+            elif total_accepted > 0:
+                projected = (remaining * total_drawn + total_accepted - 1) // total_accepted
+                want = min(per_batch, max(remaining, projected))
+            else:
+                want = per_batch
+            got = self.sample_batch(crystal, want, pbar="Denoising" if pbar else None)
+            if not got:
+                break
+            total_drawn += len(got)
+            if len(got) < want:
+                per_batch = max(1, min(per_batch, len(got)))
+            accepted = _clash_free(got) if self.filter_clashing else got
+            total_accepted += len(accepted)
+            produced.extend(accepted)
             if progress is not None:
-                progress.update(min(len(got), need))
-        result = produced[:target_samples]
-        return _drop_clashes(result) if self.filter_clashing else result
+                progress.update(min(len(accepted), remaining))
+            if not self.filter_clashing:
+                continue
+            rounds += 1
+            if rounds >= MAX_RESAMPLE_ROUNDS:
+                break
+        return produced[:target_samples]
 
     @torch.inference_mode()
     def sample(
@@ -392,7 +392,9 @@ def rows_for_samples(
 
 
 def write_shard(shards_dir: Path, shard_index: int, rows: list[dict[str, Any]]) -> None:
-    pl.DataFrame(rows).write_parquet(shards_dir / f"shard_{shard_index:06d}.parquet")
+    pl.DataFrame(rows, schema=PREDICTION_SCHEMA).write_parquet(
+        shards_dir / f"shard_{shard_index:06d}.parquet"
+    )
 
 
 def merge_shards(shards_dir: Path, predictions_path: Path) -> None:
@@ -488,18 +490,28 @@ def write_run_config(
 ) -> None:
     (output_dir / "config.json").write_text(
         json.dumps(
-            build_run_config(
-                requests,
-                sampler.model,
-                str(sampler.device),
-                num_gpus,
-                batch_size,
-                sampler.n_steps,
-                sampler.use_ema,
-                sampler.use_bf16,
-                sampler.compile,
-                overwrite,
-            ),
+            {
+                "model": sampler.model,
+                "checkpoint": sampler.checkpoint,
+                "device": str(sampler.device),
+                "num_gpus": num_gpus,
+                "batch_size": batch_size,
+                "n_steps": sampler.n_steps,
+                "use_ema": sampler.use_ema,
+                "use_bf16": sampler.use_bf16,
+                "compile": sampler.compile,
+                "filter_clashing": sampler.filter_clashing,
+                "overwrite": overwrite,
+                "requests": [
+                    {
+                        "id": request.id,
+                        "smiles": request.smiles,
+                        "copies": request.copies,
+                        "samples": request.samples,
+                    }
+                    for request in requests
+                ],
+            },
             indent=2,
         )
         + "\n"
@@ -517,6 +529,8 @@ def run_chunks_on_gpus(
 ) -> None:
     """Sample every chunk into `shards_dir`, on one GPU or fanned out across many."""
     if num_gpus == 1:
+        if seed is not None:
+            _seed_everything(seed)
         run_chunks(sampler, requests, chunks, shards_dir, pbar=pbar)
         return
     if not torch.cuda.is_available():
@@ -570,9 +584,7 @@ def merge_request_shards(
     paths = [path for path in paths if path.is_file()]
     if not paths:
         # No shards (e.g. samples == 0): write an empty, well-typed predictions file.
-        pl.DataFrame(
-            schema={"id": pl.String, "sample_idx": pl.Int64, "cif": pl.String}
-        ).write_parquet(predictions_path)
+        pl.DataFrame([], schema=PREDICTION_SCHEMA).write_parquet(predictions_path)
         return
     pl.concat([pl.read_parquet(path) for path in paths], how="vertical").with_columns(
         (pl.col("sample_idx") - sample_idx_offset).alias("sample_idx")
@@ -676,6 +688,7 @@ def sample(
     overwrite: bool = False,
     pbar: bool = True,
     seed: int | None = None,
+    filter_clashing: bool = False,
 ) -> list[Crystal] | Path:
     sampler = ClariSampler(
         model,
@@ -686,6 +699,7 @@ def sample(
         compile=compile,
         torch_threads=torch_threads,
         num_gpus=num_gpus,
+        filter_clashing=filter_clashing,
         seed=seed,
     )
     return sampler.sample(
@@ -708,7 +722,7 @@ def save(crystals: list[Crystal], output_dir: str | Path, overwrite: bool = Fals
         for i, c in enumerate(crystals)
     ]
     parquet_path = output_dir / "predictions.parquet"
-    pl.DataFrame(rows).write_parquet(parquet_path)
+    pl.DataFrame(rows, schema=PREDICTION_SCHEMA).write_parquet(parquet_path)
     return parquet_path
 
 
@@ -738,33 +752,47 @@ def sample_trajectory(
     """Demo-only: sample crystal structures and return their full diffusion trajectories."""
     request = make_request(smiles, id=id, copies=copies, samples=samples)
     template = request_to_crystal(request)
-    batch = Crystal.collate([template] * samples).to(sampler.device)
 
-    with torch.autocast(
-        device_type=sampler.device.type,
-        dtype=torch.bfloat16,
-        enabled=sampler.use_bf16,
-    ):
-        traj = sampler.lit.sampler.sample(
-            sampler.lit.interface,
-            sampler.lit.net,
-            batch,
-            pbar="Denoising steps",
-            return_trajectory=True,
-        )
-    traj = traj.cpu()
-
-    results = []
-    for i in range(samples):
-        t = traj[:, i]
-        results.append(
-            CrystalTrajectory(
-                crystal=template.replace(x=t[-1]),
-                trajectory=t,
+    results: list[CrystalTrajectory] = []
+    total_drawn = 0
+    total_accepted = 0
+    rounds = 0
+    while len(results) < samples:
+        remaining = samples - len(results)
+        if filter_clashing and total_accepted > 0:
+            projected = (remaining * total_drawn + total_accepted - 1) // total_accepted
+            want = min(samples, max(remaining, projected))
+        else:
+            want = remaining
+        batch = Crystal.collate([template] * want).to(sampler.device)
+        with torch.autocast(
+            device_type=sampler.device.type,
+            dtype=torch.bfloat16,
+            enabled=sampler.use_bf16,
+        ):
+            traj = sampler.lit.sampler.sample(
+                sampler.lit.interface,
+                sampler.lit.net,
+                batch,
+                pbar="Denoising steps",
+                return_trajectory=True,
             )
-        )
-    if filter_clashing:
+        traj = traj.cpu()
+        batch_results = [
+            CrystalTrajectory(crystal=template.replace(x=traj[:, i][-1]), trajectory=traj[:, i])
+            for i in range(want)
+        ]
+        total_drawn += want
+        if not filter_clashing:
+            results.extend(batch_results)
+            break
+
         from clari.pipelines.utils.metrics import is_clash_free
 
-        results = [r for r in results if is_clash_free(r.crystal)]
-    return results
+        batch_results = [r for r in batch_results if is_clash_free(r.crystal)]
+        total_accepted += len(batch_results)
+        results.extend(batch_results)
+        rounds += 1
+        if rounds >= MAX_RESAMPLE_ROUNDS:
+            break
+    return results[:samples]
