@@ -738,26 +738,29 @@ def sample_trajectory(
     """Demo-only: sample crystal structures and return their full diffusion trajectories."""
     request = make_request(smiles, id=id, copies=copies, samples=samples)
     template = request_to_crystal(request)
-    batch = Crystal.collate([template]).to(sampler.device)
+    batch = Crystal.collate([template] * samples).to(sampler.device)
+
+    with torch.autocast(
+        device_type=sampler.device.type,
+        dtype=torch.bfloat16,
+        enabled=sampler.use_bf16,
+    ):
+        traj = sampler.lit.sampler.sample(
+            sampler.lit.interface,
+            sampler.lit.net,
+            batch,
+            pbar="Denoising steps",
+            return_trajectory=True,
+        )
+    traj = traj.cpu()
 
     results = []
-    for _ in range(samples):
-        with torch.autocast(
-            device_type=sampler.device.type,
-            dtype=torch.bfloat16,
-            enabled=sampler.use_bf16,
-        ):
-            traj = sampler.lit.sampler.sample(
-                sampler.lit.interface,
-                sampler.lit.net,
-                batch,
-                return_trajectory=True,
-            )
-        traj = traj.squeeze(1).cpu()
+    for i in range(samples):
+        t = traj[:, i]
         results.append(
             CrystalTrajectory(
-                crystal=template.replace(x=traj[-1]),
-                trajectory=traj,
+                crystal=template.replace(x=t[-1]),
+                trajectory=t,
             )
         )
     if filter_clashing:

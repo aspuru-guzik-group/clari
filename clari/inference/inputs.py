@@ -5,6 +5,8 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+from huggingface_hub import hf_hub_download
+
 HUB_MODELS: dict[str, tuple[str, str]] = {
     "clari-m": ("the-matter-lab/clari", "clari-med.ckpt"),
     "clari-l": ("the-matter-lab/clari", "clari-large.ckpt"),
@@ -76,8 +78,6 @@ def resolve_checkpoint(checkpoint: str | Path) -> str:
     """Resolve a hub model name/alias to a downloaded checkpoint, or pass through a local path."""
     key = str(checkpoint).strip().lower()
     if key in HUB_MODELS:
-        from huggingface_hub import hf_hub_download
-
         repo_id, filename = HUB_MODELS[key]
         return hf_hub_download(repo_id=repo_id, filename=filename)
     if not Path(checkpoint).is_file():

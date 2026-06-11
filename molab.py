@@ -50,11 +50,8 @@ def _():
 
     import anywidget
     import marimo as mo
-    import py3Dmol
-    import torch
     import traitlets
 
-    from clari.chem.draw import draw_crystal, draw_crystal_trajectory_from_batch
     from clari.inference import ClariSampler
     from clari.inference.sample import sample_trajectory
 
@@ -439,6 +436,7 @@ def _(
     copies_inputs,
     filter_clashing,
     get_comps,
+    mo,
     model,
     n_steps,
     run,
@@ -457,6 +455,55 @@ def _(
         if _smiles:
             import traceback
 
+            import tqdm
+
+            # Save original tqdm methods
+            _orig_tqdm = tqdm.tqdm
+            _orig_trange = tqdm.trange
+            _orig_auto_tqdm = tqdm.auto.tqdm
+            _orig_auto_trange = tqdm.auto.trange
+
+            class MarimoTqdm(tqdm.tqdm):
+                def __init__(self, *args, **kwargs):
+                    # Save original disable flag, and force disable inside standard tqdm
+                    # to prevent it from writing to terminal
+                    orig_disable = kwargs.get("disable", False)
+                    kwargs["disable"] = True
+                    super().__init__(*args, **kwargs)
+                    self.disable = orig_disable
+                    
+                    self.pbar_ctx = None
+                    self.pbar = None
+                    if not self.disable:
+                        self.pbar_ctx = mo.status.progress_bar(
+                            total=self.total,
+                            title=self.desc or "Denoising steps",
+                            remove_on_exit=True,
+                        )
+                        self.pbar = self.pbar_ctx.__enter__()
+
+                def update(self, n=1):
+                    super().update(n)
+                    if self.pbar:
+                        self.pbar.update(increment=n)
+
+                def close(self):
+                    super().close()
+                    if self.pbar_ctx:
+                        self.pbar_ctx.__exit__(None, None, None)
+                        self.pbar_ctx = None
+                        self.pbar = None
+
+                def set_description(self, desc=None, refresh=True):
+                    super().set_description(desc, refresh)
+                    if self.pbar and desc:
+                        self.pbar.title = desc
+
+            tqdm.tqdm = MarimoTqdm
+            tqdm.trange = lambda *args, **kwargs: MarimoTqdm(range(*args), **kwargs)
+            tqdm.auto.tqdm = MarimoTqdm
+            tqdm.auto.trange = lambda *args, **kwargs: MarimoTqdm(range(*args), **kwargs)
+
             try:
                 _sampler = ClariSampler(
                     _model_ids[model.value],
@@ -464,13 +511,15 @@ def _(
                     torch_threads=1,
                     filter_clashing=bool(filter_clashing.value),
                 )
-                _trajectories = sample_trajectory(
-                    _sampler,
-                    _smiles,
-                    copies=_copies,
-                    samples=int(samples.value),
-                    filter_clashing=bool(filter_clashing.value),
-                )
+                with mo.status.spinner(title="Generating crystal packings...") as _spinner:
+                    _trajectories = sample_trajectory(
+                        _sampler,
+                        _smiles,
+                        copies=_copies,
+                        samples=int(samples.value),
+                        filter_clashing=bool(filter_clashing.value),
+                    )
+
                 set_sel(0)
                 set_result(
                     {
@@ -488,6 +537,11 @@ def _(
                 set_result(
                     {"error": f"{type(_exc).__name__}: {_exc}", "traceback": traceback.format_exc()}
                 )
+            finally:
+                tqdm.tqdm = _orig_tqdm
+                tqdm.trange = _orig_trange
+                tqdm.auto.tqdm = _orig_auto_tqdm
+                tqdm.auto.trange = _orig_auto_trange
     return
 
 
@@ -633,12 +687,17 @@ def _(
     _static_xyz = _frame_to_xyz(_crystal)
     _static_box = json.dumps([_box_geometry(_crystal)])
 
-    # Trajectory: every denoising step, wrapped, each with its own (denoised) lattice.
+    # Trajectory: every denoising step, wrapped with the final crystal's COM shift offset.
     _traj = trajectories[_idx]
-    _steps = [
-        _traj.crystal.replace(x=_traj.trajectory[_i]).wrapped(mode="com", bounds=(-0.5, 0.5))
-        for _i in range(_traj.trajectory.shape[0])
-    ]
+    _final_crystal = crystals[_idx]
+    _wrapped_final = _final_crystal.wrapped(mode="com", bounds=(-0.5, 0.5))
+    _shift = _wrapped_final.frac_coords - _final_crystal.frac_coords
+    _steps = []
+    for _i in range(_traj.trajectory.shape[0]):
+        _step_crystal = _traj.crystal.replace(x=_traj.trajectory[_i])
+        _f_shifted = _step_crystal.frac_coords + _shift
+        _step_wrapped = _step_crystal.update_x(coords=_step_crystal.cob_euclidean(_f_shifted))
+        _steps.append(_step_wrapped)
     _xyz_blocks = [_frame_to_xyz(_s) for _s in _steps]
     _boxes = [_box_geometry(_s) for _s in _steps]
 
