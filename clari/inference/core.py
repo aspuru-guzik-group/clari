@@ -72,6 +72,7 @@ def main(argv: list[str] | None = None) -> int:
     validate_requests(requests)
 
     import sys
+
     print(f"Using model: {args['model']}", file=sys.stderr)
     print(f"Using device: {resolve_device(args['device'])}", file=sys.stderr)
 
@@ -129,6 +130,7 @@ def main(argv: list[str] | None = None) -> int:
             print(result / "predictions.parquet")
         if args["export_cifs"]:
             from clari.inference.export import export_cifs
+
             for result in results:
                 export_cifs(result, overwrite=args["overwrite"])
         return 0
@@ -153,6 +155,7 @@ def main(argv: list[str] | None = None) -> int:
     print(result / "predictions.parquet")
     if args["export_cifs"]:
         from clari.inference.export import export_cifs
+
         export_cifs(result, overwrite=args["overwrite"])
     return 0
 

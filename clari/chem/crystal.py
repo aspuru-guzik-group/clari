@@ -332,6 +332,7 @@ class Crystal:
     def show(self, lattice: bool = True, wrap: str = "none", **kwargs):
         assert not self.batched
         from clari.chem.draw import draw_crystal
+
         C = self.wrapped(mode=wrap, bounds=(-0.5, 0.5))
         return draw_crystal(
             lattice=(C.lattice.numpy(force=True) if lattice else None),

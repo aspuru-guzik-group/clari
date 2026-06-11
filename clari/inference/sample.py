@@ -797,6 +797,7 @@ def sample_trajectory(
         ]
         if filter_clashing:
             from clari.pipelines.utils.metrics import is_clash_free
+
             batch_results = [r for r in batch_results if is_clash_free(r.crystal)]
             if len(batch_results) < need:
                 resample_rounds += 1
