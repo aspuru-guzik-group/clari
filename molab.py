@@ -342,7 +342,7 @@ def _(get_comps, ketcher, mo, set_comps):
                             mo.hstack(
                                 [
                                     mo.md(
-                                        "<span style='color:#657188;font-size:.85rem'>Copies in asym. unit</span>"
+                                        "<span style='color:#657188;font-size:.85rem'>Copies per formula unit</span>"
                                     ),
                                     copies_inputs[i],
                                 ],
