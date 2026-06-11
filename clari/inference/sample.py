@@ -233,7 +233,7 @@ class ClariSampler:
         return self._lit
 
     @torch.inference_mode()
-    def sample_batch(self, crystal: Crystal, count: int) -> list[Crystal]:
+    def sample_batch(self, crystal: Crystal, count: int, pbar: str | None = None) -> list[Crystal]:
         current = count
         while True:
             batch_gpu = None
@@ -248,7 +248,7 @@ class ClariSampler:
                         self.lit.interface,
                         self.lit.net,
                         batch_gpu,
-                        pbar=None,
+                        pbar=pbar,
                     )
                 return out.cpu().unbatch()
             except RuntimeError as exc:
@@ -271,6 +271,7 @@ class ClariSampler:
         samples: int | None = None,
         batch_size: int | None = None,
         progress: tqdm | None = None,
+        pbar: bool = True,
     ) -> list[Crystal]:
         crystal = request_to_crystal(request)
         target_samples = request.samples if samples is None else samples
@@ -280,7 +281,7 @@ class ClariSampler:
         produced: list[Crystal] = []
         while len(produced) < target_samples:
             need = min(per_batch, target_samples - len(produced))
-            got = self.sample_batch(crystal, need)
+            got = self.sample_batch(crystal, need, pbar="Denoising" if pbar else None)
             produced.extend(got[:need])
             per_batch = min(per_batch, len(got))
             if progress is not None:
@@ -331,7 +332,10 @@ class ClariSampler:
                 for request in requests:
                     results.extend(
                         self.sample_request(
-                            request, batch_size=request.batch_size or batch_size, progress=progress
+                            request,
+                            batch_size=request.batch_size or batch_size,
+                            progress=progress,
+                            pbar=pbar,
                         )
                     )
             finally:
@@ -421,6 +425,7 @@ def run_chunks(
                 samples=chunk["count"],
                 batch_size=chunk["count"],
                 progress=progress,
+                pbar=pbar,
             )
             write_shard(
                 shards_dir,
