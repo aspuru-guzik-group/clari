@@ -7,7 +7,6 @@ from einops import rearrange
 
 
 class SinusoidEmbedding(nn.Module):
-
     def __init__(self, dim, n, wrange, wnum=256, skip=True, div1=False):
         super().__init__()
 
@@ -38,7 +37,6 @@ class SinusoidEmbedding(nn.Module):
 
 
 class VocabEmbedding(nn.Module):
-
     def __init__(self, vocab, dim, vmax):
         super().__init__()
 
@@ -57,7 +55,6 @@ class VocabEmbedding(nn.Module):
 
 
 class FormulaEmbedding(nn.Module):
-
     def __init__(self, vocab, dim):
         super().__init__()
 
@@ -71,7 +68,6 @@ class FormulaEmbedding(nn.Module):
 
 
 class BinnedEmbedding(nn.Module):
-
     def __init__(self, dim, bins, binmax):
         super().__init__()
 
@@ -86,7 +82,6 @@ class BinnedEmbedding(nn.Module):
 
 
 class LatticeEmbedding(nn.Module):
-
     def __init__(self, dim):
         super().__init__()
 

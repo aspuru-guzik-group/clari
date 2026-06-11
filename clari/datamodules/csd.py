@@ -21,7 +21,6 @@ EXCLUDED_CSD_IDS = {"BTCOAC"}  # BTCOAC03 is the usable representative for this 
 
 
 class CrystalDataset(Dataset):
-
     def __init__(
         self,
         crystals,
@@ -129,7 +128,6 @@ class CrystalDataset(Dataset):
 
 
 class RandomSubset(Dataset):
-
     def __init__(self, dataset, n, generator):
         super().__init__()
 
@@ -152,7 +150,6 @@ DEFAULT_SPLIT_OPTS = {
 
 
 class CrystalDataModule(L.LightningDataModule):
-
     def __init__(
         self,
         seed: int = 0,
@@ -246,7 +243,6 @@ class CrystalDataModule(L.LightningDataModule):
 
 
 class CrystalDataModuleForFM(CrystalDataModule):
-
     def val_dataloader(self):
         return [
             self._loader(dataset="val"),

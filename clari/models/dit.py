@@ -23,7 +23,6 @@ from clari.models.layers import (
 
 
 class DiT(nn.Module):
-
     def __init__(
         self,
         dim: int = 256,

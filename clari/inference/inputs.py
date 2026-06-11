@@ -10,6 +10,8 @@ HUB_MODELS: dict[str, tuple[str, str]] = {
     "clari-l": ("the-matter-lab/clari", "clari-large.ckpt"),
     "clari-h": ("the-matter-lab/clari", "clari-huge.ckpt"),
 }
+
+
 def sanitize_id(text: str) -> str:
     text = re.sub(r"[^A-Za-z0-9._-]+", "_", text).strip("_")
     return text[:80] or "sample"

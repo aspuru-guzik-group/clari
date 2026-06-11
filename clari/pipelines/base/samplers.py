@@ -20,7 +20,6 @@ SCHEDULE_PRESETS: dict[SamplingSchedule, dict] = {
 
 
 class Sampler(ABC):
-
     def __init__(
         self,
         num_steps: int = 100,
@@ -130,7 +129,6 @@ class Sampler(ABC):
 
 
 class EulerSampler(Sampler):
-
     def step(
         self,
         interface: Interface,
@@ -156,7 +154,6 @@ class EulerSampler(Sampler):
 
 
 class HeunSampler(Sampler):
-
     def step(
         self,
         interface: Interface,

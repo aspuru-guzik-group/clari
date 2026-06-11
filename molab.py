@@ -23,8 +23,19 @@ app = marimo.App(
 @app.cell(hide_code=True)
 def _():
     import subprocess, sys
+
     subprocess.run(
-        [sys.executable, "-m", "pip", "install", "clari", "py3dmol", "anywidget", "traitlets", "rdkit"],
+        [
+            sys.executable,
+            "-m",
+            "pip",
+            "install",
+            "clari",
+            "py3dmol",
+            "anywidget",
+            "traitlets",
+            "rdkit",
+        ],
         check=True,
     )
     deps_ready = True
@@ -366,7 +377,10 @@ def _(get_comps, ketcher, mo, set_comps):
             add_btn,
             mo.hstack(
                 [smiles_text, add_smiles_btn],
-                justify="start", gap=0.5, align="center", widths=[5, 1],
+                justify="start",
+                gap=0.5,
+                align="center",
+                widths=[5, 1],
             ),
         ],
         gap=0.6,
@@ -378,7 +392,10 @@ def _(get_comps, ketcher, mo, set_comps):
 def _(filter_clashing, mo, model, n_steps, run, samples, z):
     def _field(lbl, el):
         return mo.vstack(
-            [mo.md(f"<span style='font-size:.82rem;font-weight:600;color:#657188'>{lbl}</span>"), el],
+            [
+                mo.md(f"<span style='font-size:.82rem;font-weight:600;color:#657188'>{lbl}</span>"),
+                el,
+            ],
             gap=0.25,
         )
 
@@ -392,7 +409,9 @@ def _(filter_clashing, mo, model, n_steps, run, samples, z):
                     _field("Denoising steps", n_steps),
                     _field("Z", z),
                 ],
-                widths="equal", gap=1.0, align="start",
+                widths="equal",
+                gap=1.0,
+                align="start",
             ),
             filter_clashing,
             run,
@@ -569,10 +588,18 @@ def _(
     # Centered unit-cube edges (matches clari.chem.draw.UNIT_CUBE_EDGES).
     _CUBE = np.asarray(
         [
-            [[0, 0, 0], [0, 0, 1]], [[0, 0, 0], [0, 1, 0]], [[0, 0, 0], [1, 0, 0]],
-            [[1, 0, 0], [1, 1, 0]], [[1, 0, 0], [1, 0, 1]], [[0, 1, 0], [1, 1, 0]],
-            [[0, 1, 0], [0, 1, 1]], [[0, 0, 1], [1, 0, 1]], [[0, 0, 1], [0, 1, 1]],
-            [[1, 1, 1], [0, 1, 1]], [[1, 1, 1], [1, 0, 1]], [[1, 1, 1], [1, 1, 0]],
+            [[0, 0, 0], [0, 0, 1]],
+            [[0, 0, 0], [0, 1, 0]],
+            [[0, 0, 0], [1, 0, 0]],
+            [[1, 0, 0], [1, 1, 0]],
+            [[1, 0, 0], [1, 0, 1]],
+            [[0, 1, 0], [1, 1, 0]],
+            [[0, 1, 0], [0, 1, 1]],
+            [[0, 0, 1], [1, 0, 1]],
+            [[0, 0, 1], [0, 1, 1]],
+            [[1, 1, 1], [0, 1, 1]],
+            [[1, 1, 1], [1, 0, 1]],
+            [[1, 1, 1], [1, 1, 0]],
         ],
         dtype=float,
     )

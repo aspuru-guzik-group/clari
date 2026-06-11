@@ -36,7 +36,6 @@ pl.Config.set_fmt_str_lengths(100)
 
 
 class CrystalError(ValueError):
-
     def __init__(self, msg, info=""):
         super().__init__(msg)
         self.info = info

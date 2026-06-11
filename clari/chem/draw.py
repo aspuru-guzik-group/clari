@@ -121,16 +121,16 @@ def draw_crystal_trajectory(
         trajfile += frame_xyz(traj[-1]) + "\n"
 
     view.addModelsAsFrames(trajfile, "xyz", viewer=viewer)
-    view.setStyle(
-        {"stick": {"radius": 0.2}, "sphere": {"scale": 0.2}}, viewer=viewer
-    )
+    view.setStyle({"stick": {"radius": 0.2}, "sphere": {"scale": 0.2}}, viewer=viewer)
     if lattice:
         # Re-use draw_arrow and draw_box with the `frame` keyword argument.
         for i, C in enumerate(traj):
             L = C.lattice.numpy(force=True)
             o = -0.5 * L.sum(axis=0)
             for p, c in zip(L + o, ["red", "green", "blue"], strict=False):
-                draw_arrow(view, o, p, viewer=viewer, radius=0.2, radiusRatio=2, mid=0.92, color=c, frame=i)
+                draw_arrow(
+                    view, o, p, viewer=viewer, radius=0.2, radiusRatio=2, mid=0.92, color=c, frame=i
+                )
             draw_box(view, L, viewer=viewer, radius=0.05, frame=i)
 
         for j in range(hold_last):
@@ -138,7 +138,17 @@ def draw_crystal_trajectory(
             o = -0.5 * L.sum(axis=0)
             frame_idx = len(traj) + j
             for p, c in zip(L + o, ["red", "green", "blue"], strict=False):
-                draw_arrow(view, o, p, viewer=viewer, radius=0.2, radiusRatio=2, mid=0.92, color=c, frame=frame_idx)
+                draw_arrow(
+                    view,
+                    o,
+                    p,
+                    viewer=viewer,
+                    radius=0.2,
+                    radiusRatio=2,
+                    mid=0.92,
+                    color=c,
+                    frame=frame_idx,
+                )
             draw_box(view, L, viewer=viewer, radius=0.05, frame=frame_idx)
     view.animate({"interval": interval})
     view.zoomTo()
@@ -146,16 +156,19 @@ def draw_crystal_trajectory(
 
 
 def draw_crystal_trajectory_from_batch(
-    out, batch_idx, lattice: bool = True, view=None, viewer=None, duration_play=2, duration_stop=10,
+    out,
+    batch_idx,
+    lattice: bool = True,
+    view=None,
+    viewer=None,
+    duration_play=2,
+    duration_stop=10,
 ):
     sample = out[batch_idx]
     base_crystal = sample.crystal
     traj_tensor = sample.trajectory  # Shape: (steps + 1, 3 + num_atoms, 3)
 
-    traj_crystals = [
-        base_crystal.replace(x=traj_tensor[i])
-        for i in range(traj_tensor.shape[0])
-    ]
+    traj_crystals = [base_crystal.replace(x=traj_tensor[i]) for i in range(traj_tensor.shape[0])]
 
     return draw_crystal_trajectory(
         traj_crystals,

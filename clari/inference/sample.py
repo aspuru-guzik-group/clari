@@ -565,9 +565,9 @@ def merge_request_shards(
     paths = [path for path in paths if path.is_file()]
     if not paths:
         # No shards (e.g. samples == 0): write an empty, well-typed predictions file.
-        pl.DataFrame(schema={"id": pl.String, "sample_idx": pl.Int64, "cif": pl.String}).write_parquet(
-            predictions_path
-        )
+        pl.DataFrame(
+            schema={"id": pl.String, "sample_idx": pl.Int64, "cif": pl.String}
+        ).write_parquet(predictions_path)
         return
     pl.concat([pl.read_parquet(path) for path in paths], how="vertical").with_columns(
         (pl.col("sample_idx") - sample_idx_offset).alias("sample_idx")

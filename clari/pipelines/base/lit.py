@@ -24,7 +24,6 @@ from clari.pipelines.utils import (
 
 
 class LitDiT(L.LightningModule):
-
     def __init__(
         self,
         net: DiT,

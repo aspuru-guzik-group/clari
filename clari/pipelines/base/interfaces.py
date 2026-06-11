@@ -30,7 +30,6 @@ PriorType = Literal["normal", "lat-normal", "mixture"]
 
 
 class Interface(ABC):
-
     def __init__(
         self,
         prior: PriorType = "lat-normal",
@@ -178,7 +177,6 @@ class Interface(ABC):
 
 
 class SiTInterface(Interface):
-
     def __init__(
         self,
         prior: PriorType = "normal",
