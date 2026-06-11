@@ -137,6 +137,76 @@ def _(anywidget, traitlets):
 
 
 @app.cell
+def _(anywidget, traitlets):
+    class Mol3DWidget(anywidget.AnyWidget):
+        """Inline 3Dmol.js structure viewer (no iframe → not blocked by molab CSP).
+
+        Mirrors clari.chem.draw: wrapped atoms as ball-and-stick, plus a per-frame
+        lattice box and red/green/blue cell-axis arrows. Drive it with a concatenated
+        multi-frame `frames_xyz` string and a matching `box_frames` JSON list (one box
+        per frame); set `animate` to loop through them. The lattice is denoised too, so
+        each frame carries its own box."""
+
+        _esm = """
+        let _loader;
+        function load3Dmol() {
+          if (window.$3Dmol) return Promise.resolve(window.$3Dmol);
+          if (!_loader) {
+            _loader = new Promise((resolve, reject) => {
+              const s = document.createElement("script");
+              s.src = "https://3Dmol.org/build/3Dmol-min.js";
+              s.onload = () => resolve(window.$3Dmol);
+              s.onerror = reject;
+              document.head.appendChild(s);
+            });
+          }
+          return _loader;
+        }
+
+        const pt = (p) => ({ x: p[0], y: p[1], z: p[2] });
+
+        function render({ model, el }) {
+          const h = model.get("height") || 520;
+          const box = document.createElement("div");
+          box.style.cssText = `position:relative;width:100%;height:${h}px;border:1px solid #d7dee8;border-radius:8px;overflow:hidden;background:#fff;`;
+          el.appendChild(box);
+
+          load3Dmol().then(($3Dmol) => {
+            const viewer = $3Dmol.createViewer(box, { backgroundColor: "white" });
+            viewer.addModelsAsFrames(model.get("frames_xyz"), "xyz");
+            viewer.setStyle({}, { stick: { radius: 0.2 }, sphere: { scale: 0.2 } });
+
+            let boxes = [];
+            try { boxes = JSON.parse(model.get("box_frames") || "[]"); } catch (e) {}
+            boxes.forEach((bf, i) => {
+              (bf.lines || []).forEach((seg) =>
+                viewer.addCylinder({ start: pt(seg[0]), end: pt(seg[1]), radius: 0.05, color: "#888888", frame: i })
+              );
+              (bf.arrows || []).forEach((a) =>
+                viewer.addArrow({ start: pt(a[0]), end: pt(a[1]), radius: 0.2, radiusRatio: 2, mid: 0.92, color: a[2], frame: i })
+              );
+            });
+
+            viewer.zoomTo();
+            viewer.render();
+            if (model.get("animate")) {
+              viewer.animate({ loop: "forward", interval: model.get("interval") || 120 });
+            }
+            new ResizeObserver(() => viewer.resize()).observe(box);
+          });
+        }
+        export default { render };
+        """
+        frames_xyz = traitlets.Unicode("").tag(sync=True)
+        box_frames = traitlets.Unicode("[]").tag(sync=True)
+        animate = traitlets.Bool(False).tag(sync=True)
+        interval = traitlets.Float(120.0).tag(sync=True)
+        height = traitlets.Int(520).tag(sync=True)
+
+    return (Mol3DWidget,)
+
+
+@app.cell
 def _(KetcherWidget, mo):
     ketcher = mo.ui.anywidget(KetcherWidget())
     return (ketcher,)
@@ -400,6 +470,20 @@ def _(get_result, mo):
         ),
     )
     mo.stop(
+        result.get("error") is not None,
+        mo.callout(
+            mo.vstack(
+                [
+                    mo.md(f"**Sampling failed:** {result.get('error', '')}"),
+                    mo.accordion(
+                        {"Full traceback": mo.md(f"```\n{result.get('traceback', '')}\n```")}
+                    ),
+                ]
+            ),
+            kind="danger",
+        ),
+    )
+    mo.stop(
         len(result["crystals"]) == 0,
         mo.md(
             "<p style='color:#b45309'>Every sampled candidate had atom clashes and was filtered out. Try more candidates, fewer copies, or uncheck <b>Filter clashing structures</b>.</p>"
@@ -439,16 +523,13 @@ def _(crystals, get_sel, mo, set_sel):
 
 @app.cell
 def _(
+    Mol3DWidget,
     base64,
     crystals,
-    draw_crystal,
-    draw_crystal_trajectory_from_batch,
     get_sel,
     io,
     mo,
-    py3Dmol,
     sampled_smiles,
-    torch,
     trajectories,
     zipfile,
 ):
@@ -472,46 +553,88 @@ def _(
         f'<a class="dl" download="candidate_{_idx + 1:03d}.cif" href="data:chemical/x-cif;base64,{base64.b64encode(_cif.encode()).decode()}">⬇ Download current CIF</a>'
     )
 
-    _view = draw_crystal(
-        _crystal.atom_nums.detach().cpu().numpy(),
-        _crystal.coords.detach().cpu().numpy(),
-        lattice=_crystal.lattice.detach().cpu().numpy(),
-        view=py3Dmol.view(width="100%", height=_h),
+    import json
+
+    import numpy as np
+
+    # Centered unit-cube edges (matches clari.chem.draw.UNIT_CUBE_EDGES).
+    _CUBE = np.asarray(
+        [
+            [[0, 0, 0], [0, 0, 1]], [[0, 0, 0], [0, 1, 0]], [[0, 0, 0], [1, 0, 0]],
+            [[1, 0, 0], [1, 1, 0]], [[1, 0, 0], [1, 0, 1]], [[0, 1, 0], [1, 1, 0]],
+            [[0, 1, 0], [0, 1, 1]], [[0, 0, 1], [1, 0, 1]], [[0, 0, 1], [0, 1, 1]],
+            [[1, 1, 1], [0, 1, 1]], [[1, 1, 1], [1, 0, 1]], [[1, 1, 1], [1, 1, 0]],
+        ],
+        dtype=float,
     )
 
-    _traj = trajectories[_idx]
-    _frames = torch.stack(
-        [
-            _traj.crystal.replace(x=_traj.trajectory[i]).wrapped(mode="com", bounds=(-0.5, 0.5)).x
-            for i in range(_traj.trajectory.shape[0])
+    def _frame_to_xyz(_frame):
+        from ase.data import chemical_symbols
+
+        _nums = _frame.atom_nums.detach().cpu().numpy()
+        _xyz = _frame.coords.detach().cpu().numpy()
+        _lines = [str(len(_nums)), ""]
+        for _num, (_x, _y, _w) in zip(_nums, _xyz):
+            _lines.append(f"{chemical_symbols[int(_num)]} {_x:.4f} {_y:.4f} {_w:.4f}")
+        return "\n".join(_lines)
+
+    def _box_geometry(_frame):
+        # Lattice box + r/g/b cell-axis arrows, centered at the origin (matches draw.py).
+        _lat = _frame.lattice.detach().cpu().numpy()
+        _o = -0.5 * _lat.sum(axis=0)
+        _edges = (_CUBE - 0.5) @ _lat
+        _lines = [[seg[0].tolist(), seg[1].tolist()] for seg in _edges]
+        _arrows = [
+            [_o.tolist(), _p.tolist(), _col]
+            for _p, _col in zip(_lat + _o, ["red", "green", "blue"])
         ]
+        return {"lines": _lines, "arrows": _arrows}
+
+    # Static viewer: the final wrapped structure with its lattice.
+    _static_xyz = _frame_to_xyz(_crystal)
+    _static_box = json.dumps([_box_geometry(_crystal)])
+
+    # Trajectory: every denoising step, wrapped, each with its own (denoised) lattice.
+    _traj = trajectories[_idx]
+    _steps = [
+        _traj.crystal.replace(x=_traj.trajectory[_i]).wrapped(mode="com", bounds=(-0.5, 0.5))
+        for _i in range(_traj.trajectory.shape[0])
+    ]
+    _xyz_blocks = [_frame_to_xyz(_s) for _s in _steps]
+    _boxes = [_box_geometry(_s) for _s in _steps]
+
+    # Hold on the final frame for a beat before looping.
+    _duration_play, _duration_stop = 2.0, 1.2
+    _interval = _duration_play * 1000 / max(1, len(_steps))
+    _hold = round(_duration_stop / (_interval / 1000))
+    _xyz_blocks += [_xyz_blocks[-1]] * _hold
+    _boxes += [_boxes[-1]] * _hold
+
+    # Inline 3Dmol widgets (no iframe → not blocked by molab CSP).
+    _viewer = mo.ui.anywidget(
+        Mol3DWidget(frames_xyz=_static_xyz, box_frames=_static_box, animate=False, height=_h)
     )
-    _anim = draw_crystal_trajectory_from_batch(
-        [_traj.__class__(crystal=_crystal, trajectory=_frames)],
-        batch_idx=0,
-        view=py3Dmol.view(width="100%", height=_h),
-        duration_play=2,
-        duration_stop=4,
+    _traj_viewer = mo.ui.anywidget(
+        Mol3DWidget(
+            frames_xyz="\n".join(_xyz_blocks),
+            box_frames=json.dumps(_boxes),
+            animate=True,
+            interval=_interval,
+            height=_h,
+        )
     )
-    _anim.setStyle({"stick": {"radius": 0.2}, "sphere": {"scale": 0.2}})
-    _anim.setFrame(len(_frames) - 1)
-    _anim.zoomTo()
-    _anim.setFrame(0)
-    _anim.animate({"interval": 2000 / len(_frames)})
 
     mo.vstack(
         [
             mo.md(f"### 3D unit cell viewer · candidate #{_idx + 1}"),
             mo.hstack([_dl_one, _dl_all], justify="start", gap=0.6),
-            mo.iframe(_view.write_html(fullpage=True), height=_h + 20),
+            _viewer,
             mo.md(
                 f"<p style='color:#657188;font-size:.9rem'>{sampled_smiles} · candidate {_idx + 1} of {len(crystals)}</p>"
             ),
             mo.accordion(
                 {
-                    "Sampling trajectory": mo.iframe(
-                        _anim.write_html(fullpage=True), height=_h + 20
-                    ),
+                    "Sampling trajectory": _traj_viewer,
                     "CIF text": mo.md(f"```cif\n{_cif}\n```"),
                 }
             ),
