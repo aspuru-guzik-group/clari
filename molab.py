@@ -160,11 +160,11 @@ def _(mo):
 @app.cell
 def _(mo):
     model = mo.ui.dropdown(
-        options=["Clari Medium", "Clari Large", "Clari Huge"], value="Clari Medium", label="Model"
+        options=["Clari Medium", "Clari Large", "Clari Huge"], value="Clari Medium", full_width=True
     )
-    samples = mo.ui.number(start=1, stop=64, step=1, value=8, label="Candidates to sample")
-    n_steps = mo.ui.number(start=1, stop=200, step=1, value=50, label="Denoising steps")
-    z = mo.ui.number(start=1, stop=16, step=1, value=4, label="Z")
+    samples = mo.ui.number(start=1, stop=64, step=1, value=8, full_width=True)
+    n_steps = mo.ui.number(start=1, stop=200, step=1, value=50, full_width=True)
+    z = mo.ui.number(start=1, stop=16, step=1, value=4, full_width=True)
     filter_clashing = mo.ui.checkbox(value=True, label="Filter clashing structures")
     run = mo.ui.run_button(label="Generate crystal packings", kind="success")
     return filter_clashing, model, n_steps, run, samples, z
@@ -298,10 +298,24 @@ def _(get_comps, ketcher, mo, mol_svg, set_comps):
 
 @app.cell
 def _(filter_clashing, model, mo, n_steps, run, samples, z):
+    def _field(lbl, el):
+        return mo.vstack(
+            [mo.md(f"<span style='font-size:.82rem;font-weight:600;color:#657188'>{lbl}</span>"), el],
+            gap=0.25,
+        )
+
     mo.vstack(
         [
             mo.md("<div class='step'>3. Model &amp; generation options</div>"),
-            mo.hstack([model, samples, n_steps, z], widths="equal"),
+            mo.hstack(
+                [
+                    _field("Model", model),
+                    _field("Candidates to sample", samples),
+                    _field("Denoising steps", n_steps),
+                    _field("Z", z),
+                ],
+                widths="equal", gap=1.0, align="start",
+            ),
             filter_clashing,
             run,
         ],
@@ -313,7 +327,7 @@ def _(filter_clashing, model, mo, n_steps, run, samples, z):
 @app.cell
 def _(mo):
     get_result, set_result = mo.state(None)
-    get_sel, set_sel = mo.state(0)
+    get_sel, set_sel = mo.state(0, allow_self_loops=True)
     return get_result, get_sel, set_result, set_sel
 
 
