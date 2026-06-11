@@ -160,6 +160,15 @@ def parse_cli_request(
     return [make_request(parts, id=request_id, samples=samples)]
 
 
+KNOWN_REQUEST_KEYS = {"id", "smiles", "copies", "samples", "batch_size"}
+
+
+def _warn(message: str) -> None:
+    import sys
+
+    print(f"Warning: {message}", file=sys.stderr)
+
+
 def parse_config_requests(config_path: str | Path) -> tuple[list[SampleRequest], dict[str, object]]:
     config = json.loads(Path(config_path).read_text())
     if not isinstance(config, dict):
@@ -171,6 +180,12 @@ def parse_config_requests(config_path: str | Path) -> tuple[list[SampleRequest],
     for item in items:
         if not isinstance(item, dict):
             raise ValueError(f"Each request must be an object, got {type(item)!r}")
+        unknown = sorted(set(item) - KNOWN_REQUEST_KEYS)
+        if unknown:
+            _warn(
+                f"ignoring unknown request key(s) {unknown}; "
+                f"known keys are {sorted(KNOWN_REQUEST_KEYS)}"
+            )
         smiles = item.get("smiles")
         valid = isinstance(smiles, str) or (
             isinstance(smiles, list)

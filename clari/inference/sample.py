@@ -309,6 +309,7 @@ class ClariSampler:
             requests = list(smiles)
         else:
             requests = [make_request(smiles, id=id, copies=copies, samples=samples)]
+        validate_requests(requests)
         num_gpus = self.num_gpus if num_gpus is None else num_gpus
         if output_dir is None and num_gpus > 1:
             raise ValueError("num_gpus > 1 requires output_dir.")

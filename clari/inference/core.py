@@ -41,8 +41,13 @@ def main(argv: list[str] | None = None) -> int:
         if args["pos_args"] or args["smiles"]:
             raise ValueError("`--config` cannot be combined with direct SMILES input.")
         requests, options = parse_config_requests(args["config"])
+        known_top_level = set(args) | {"use_ema", "use_bf16", "pbar"}
         for key, value in options.items():
-            if key in args and args[key] == parser.get_default(key):
+            if key not in known_top_level:
+                from clari.inference.inputs import _warn
+
+                _warn(f"ignoring unknown top-level config key {key!r}")
+            elif key in args and args[key] == parser.get_default(key):
                 args[key] = value
     else:
         requests = parse_cli_request(
