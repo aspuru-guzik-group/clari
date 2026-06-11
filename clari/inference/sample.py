@@ -520,6 +520,8 @@ def run_chunks_on_gpus(
 ) -> None:
     """Sample every chunk into `shards_dir`, on one GPU or fanned out across many."""
     if num_gpus == 1:
+        if seed is not None:
+            _seed_everything(seed)
         run_chunks(sampler, requests, chunks, shards_dir, pbar=pbar)
         return
     if not torch.cuda.is_available():
@@ -743,8 +745,8 @@ def sample_trajectory(
     template = request_to_crystal(request)
 
     results: list[CrystalTrajectory] = []
-    resample_rounds = 0
     while len(results) < samples:
+        resample_rounds = 0
         need = samples - len(results)
         batch = Crystal.collate([template] * need).to(sampler.device)
         with torch.autocast(
