@@ -254,7 +254,7 @@ def _(mo):
 @app.cell
 def _(mo):
     model = mo.ui.dropdown(
-        options=["Clari Medium", "Clari Large", "Clari Huge"], value="Clari Medium", full_width=True
+        options=["Clari Medium", "Clari Large", "Clari Huge"], value="Clari Huge", full_width=True
     )
     samples = mo.ui.number(start=1, stop=64, step=1, value=8, full_width=True)
     n_steps = mo.ui.number(start=1, stop=200, step=1, value=50, full_width=True)

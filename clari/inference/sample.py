@@ -190,7 +190,7 @@ def load_lit(
 class ClariSampler:
     def __init__(
         self,
-        checkpoint: str = "clari-m",
+        checkpoint: str = "clari-h",
         *,
         device: str | torch.device | None = "auto",
         use_ema: bool = True,
@@ -663,7 +663,7 @@ def sample_batch_to_directories(
 def sample(
     requests: SampleRequest | list[SampleRequest],
     *,
-    model: str = "clari-m",
+    model: str = "clari-h",
     output_dir: str | Path | None = None,
     batch_size: int | None = None,
     num_gpus: int = 1,

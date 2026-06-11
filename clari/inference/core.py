@@ -15,7 +15,7 @@ def build_parser() -> ArgumentParser:
     parser.add_argument("--copies", action="append", default=None)
     parser.add_argument("--id", type=str, default=None)
     parser.add_argument("--samples", type=int, default=1)
-    parser.add_argument("--model", type=str, default="clari-m")
+    parser.add_argument("--model", type=str, default="clari-h")
     parser.add_argument("--output_dir", type=str, default=None)
     parser.add_argument("--batch_size", type=int, default=None)
     parser.add_argument("--num_gpus", type=int, default=1)
@@ -28,6 +28,7 @@ def build_parser() -> ArgumentParser:
     parser.add_argument("--no_ema", action="store_true")
     parser.add_argument("--no_bf16", action="store_true")
     parser.add_argument("--no_pbar", action="store_true")
+    parser.add_argument("--no-export-cifs", action="store_false", dest="export_cifs", default=True)
     return parser
 
 
@@ -61,12 +62,17 @@ def main(argv: list[str] | None = None) -> int:
 
     from clari.inference.sample import (
         ClariSampler,
+        resolve_device,
         sample,
         sample_batch_to_directories,
         validate_requests,
     )
 
     validate_requests(requests)
+
+    import sys
+    print(f"Using model: {args['model']}", file=sys.stderr)
+    print(f"Using device: {resolve_device(args['device'])}", file=sys.stderr)
 
     use_ema = False if args["no_ema"] else bool(options.get("use_ema", True))
     use_bf16 = False if args["no_bf16"] else bool(options.get("use_bf16", True))
@@ -117,6 +123,10 @@ def main(argv: list[str] | None = None) -> int:
         )
         for result in results:
             print(result / "predictions.parquet")
+        if args["export_cifs"]:
+            from clari.inference.export import export_cifs
+            for result in results:
+                export_cifs(result, overwrite=args["overwrite"])
         return 0
 
     result = sample(
@@ -136,6 +146,9 @@ def main(argv: list[str] | None = None) -> int:
         seed=args["seed"],
     )
     print(result / "predictions.parquet")
+    if args["export_cifs"]:
+        from clari.inference.export import export_cifs
+        export_cifs(result, overwrite=args["overwrite"])
     return 0
 
 
