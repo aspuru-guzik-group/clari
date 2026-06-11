@@ -20,7 +20,7 @@ from tqdm import tqdm
 
 from clari.csd import AVAILABLE_CSD_SUBSETS, csd_fam
 from clari.datamodules import CrystalDataModule
-from clari.inference.core import resolve_hub_checkpoint
+from clari.inference.inputs import HUB_MODELS, resolve_checkpoint
 from clari.paths import RESULTS_DIR
 from clari.pipelines.base.lit import LitDiT
 
@@ -395,9 +395,9 @@ def main(
     if out.exists():
         raise FileExistsError(f"Experiment output already exists: {out}")
     source = model_or_checkpoint.strip()
-    hub_model = source.lower() if source.lower() in ("clari-m", "clari-l") else None
+    hub_model = source.lower() if source.lower() in HUB_MODELS else None
     if hub_model is not None:
-        ckpt_path = Path(resolve_hub_checkpoint(hub_model))
+        ckpt_path = Path(resolve_checkpoint(hub_model))
     else:
         ckpt_path = Path(source)
         if not ckpt_path.is_file():

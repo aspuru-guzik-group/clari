@@ -22,6 +22,7 @@ from clari.pipelines.base.lit import LitDiT
 
 H100_REFERENCE_MEMORY_GB = 81.0
 MAX_CLASH_RESAMPLE_ROUNDS = 5
+PREDICTION_SCHEMA = {"id": pl.String, "sample_idx": pl.Int64, "cif": pl.String}
 
 
 def _seed_everything(seed: int) -> None:
@@ -418,8 +419,12 @@ def rows_for_samples(
     return rows
 
 
+def predictions_df(rows: list[dict[str, Any]]) -> pl.DataFrame:
+    return pl.DataFrame(rows, schema=PREDICTION_SCHEMA)
+
+
 def write_shard(shards_dir: Path, shard_index: int, rows: list[dict[str, Any]]) -> None:
-    pl.DataFrame(rows).write_parquet(shards_dir / f"shard_{shard_index:06d}.parquet")
+    predictions_df(rows).write_parquet(shards_dir / f"shard_{shard_index:06d}.parquet")
 
 
 def merge_shards(shards_dir: Path, predictions_path: Path) -> None:
@@ -599,9 +604,7 @@ def merge_request_shards(
     paths = [path for path in paths if path.is_file()]
     if not paths:
         # No shards (e.g. samples == 0): write an empty, well-typed predictions file.
-        pl.DataFrame(
-            schema={"id": pl.String, "sample_idx": pl.Int64, "cif": pl.String}
-        ).write_parquet(predictions_path)
+        predictions_df([]).write_parquet(predictions_path)
         return
     pl.concat([pl.read_parquet(path) for path in paths], how="vertical").with_columns(
         (pl.col("sample_idx") - sample_idx_offset).alias("sample_idx")
@@ -739,7 +742,7 @@ def save(crystals: list[Crystal], output_dir: str | Path, overwrite: bool = Fals
         for i, c in enumerate(crystals)
     ]
     parquet_path = output_dir / "predictions.parquet"
-    pl.DataFrame(rows).write_parquet(parquet_path)
+    predictions_df(rows).write_parquet(parquet_path)
     return parquet_path
 
 

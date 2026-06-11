@@ -12,9 +12,9 @@ RANK_COLUMN = "rank"
 
 
 def export_cifs(
-    input_path: Path | list,
-    output_dir: Path | None = None,
-    rankings_path: Path | None = None,
+    input_path: str | Path | list,
+    output_dir: str | Path | None = None,
+    rankings_path: str | Path | None = None,
     top_k: int | None = None,
     ids: str | list[str] | None = None,
     sample_idx: int | list[int] | None = None,
@@ -48,9 +48,9 @@ def export_cifs(
         return compound_dir
 
     predictions_path = resolve_predictions_path(input_path)
-    output_dir = output_dir or predictions_path.with_name("cifs")
-    if output_dir.exists() and not overwrite:
-        raise FileExistsError(f"Output directory already exists: {output_dir}. Pass --overwrite.")
+    output_dir = Path(output_dir) if output_dir is not None else predictions_path.with_name("cifs")
+    if output_dir.exists() and not output_dir.is_dir():
+        raise FileExistsError(f"Output path exists and is not a directory: {output_dir}")
     if output_dir.exists() and overwrite:
         shutil.rmtree(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -115,7 +115,10 @@ def _as_list(value):
 
 
 def _safe_path_part(value: str) -> str:
-    return re.sub(r"[^A-Za-z0-9._-]+", "_", str(value)).strip("_") or "unknown"
+    part = re.sub(r"[^A-Za-z0-9._-]+", "_", str(value)).strip("_")
+    if part in {".", ".."}:
+        return "unknown"
+    return part or "unknown"
 
 
 def main() -> None:

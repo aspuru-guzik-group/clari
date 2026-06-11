@@ -16,6 +16,8 @@ HUB_MODELS: dict[str, tuple[str, str]] = {
 
 def sanitize_id(text: str) -> str:
     text = re.sub(r"[^A-Za-z0-9._-]+", "_", text).strip("_")
+    if text in {".", ".."}:
+        return "sample"
     return text[:80] or "sample"
 
 
@@ -33,6 +35,8 @@ class SampleRequest:
                 self.id = sanitize_id(f"{self.smiles}_x{self.copies}")
             else:
                 self.id = sanitize_id("_".join(f"{s}_x{c}" for s, c in self.smiles))
+        else:
+            self.id = sanitize_id(str(self.id))
 
 
 def make_request(
