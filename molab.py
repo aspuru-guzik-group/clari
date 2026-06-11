@@ -102,7 +102,7 @@ def _(mo):
         <h1>Fast Organic Crystal Structure Prediction with Unit Cell Flow Matching</h1>
         <div class="authors">Alston Lo<sup>&ast;</sup>, Luka Mucko<sup>&ast;</sup>, Austin H. Cheng<sup>&ast;</sup>, Andy Cai, Alastair J. A. Price, Wojciech Matusik, and Alán Aspuru-Guzik</div>
         <div class="contrib"><sup>&ast;</sup>Equal contribution</div>
-        <p>Draw molecular components in the Ketcher board, add them to the cell contents, set how many copies of each, then sample candidate crystal packings and inspect and download their CIFs.</p>
+        <p>Draw molecular components in the Ketcher board, add them to the unit cell, set how many copies of each, then sample candidate crystal packings and inspect and download their CIFs.</p>
         <div class="badges">
             <a href="https://arxiv.org/abs/2606.03199"><img src="https://img.shields.io/badge/arXiv-2606.03199-b31b1b.svg" /></a>
             <a href="https://github.com/aspuru-guzik-group/clari"><img src="https://img.shields.io/badge/GitHub-aspuru--guzik--group%2Fclari-24292f.svg?logo=github" /></a>
@@ -228,15 +228,16 @@ def _(KetcherWidget, mo):
 
 
 @app.cell
-def _(ketcher, mo):
+def _(add_btn, ketcher, mo):
     _current = (ketcher.value or {}).get("smiles", "").strip()
     mo.vstack(
         [
             mo.md("<div class='step'>1. Draw a molecular component</div>"),
             mo.md(
-                "<p style='color:#657188;font-size:.92rem'>Sketch a structure below, then add it to the cell contents on the right. Draw and add several components for co-crystals.</p>"
+                "<p style='color:#657188;font-size:.92rem'>Sketch a structure below, then add it to the unit cell. Draw and add several components for co-crystals.</p>"
             ),
             ketcher,
+            add_btn,
             mo.md(
                 f"<div class='smiles'>Current drawing: {_current or '— nothing drawn yet —'}</div>"
             ),
@@ -248,7 +249,7 @@ def _(ketcher, mo):
 
 @app.cell
 def _(mo):
-    # Each entry is one molecular component of the cell contents.
+    # Each entry is one molecular component of the unit cell.
     get_comps, set_comps = mo.state([], allow_self_loops=True)
     return get_comps, set_comps
 
@@ -260,10 +261,9 @@ def _(mo):
     )
     samples = mo.ui.number(start=1, stop=64, step=1, value=8, full_width=True)
     n_steps = mo.ui.number(start=1, stop=200, step=1, value=50, full_width=True)
-    z = mo.ui.number(start=1, stop=16, step=1, value=4, full_width=True)
     filter_clashing = mo.ui.checkbox(value=True, label="Filter clashing structures")
     run = mo.ui.run_button(label="Generate crystal packings", kind="success")
-    return filter_clashing, model, n_steps, run, samples, z
+    return filter_clashing, model, n_steps, run, samples
 
 
 @app.function
@@ -285,7 +285,7 @@ def mol_svg(smi, size=88):
 def _(get_comps, ketcher, mo, set_comps):
     comps = get_comps()
     copies_inputs = mo.ui.array(
-        [mo.ui.number(start=1, stop=16, step=1, value=c["copies"]) for c in comps]
+        [mo.ui.number(start=1, stop=64, step=1, value=c["copies"]) for c in comps]
     )
 
     def snapshot():
@@ -308,10 +308,13 @@ def _(get_comps, ketcher, mo, set_comps):
     def _add(_):
         smi = (ketcher.value or {}).get("smiles", "").strip()
         if smi:
-            set_comps(snapshot() + [{"smiles": smi, "copies": 1}])
+            set_comps(snapshot() + [{"smiles": smi, "copies": 4}])
 
     add_btn = mo.ui.button(
-        label="➕ Add drawn molecule to cell contents", kind="neutral", on_click=_add
+        label="➕ Add drawn molecule to unit cell",
+        kind="neutral",
+        on_click=_add,
+        full_width=True,
     )
 
     smiles_text = mo.ui.text(
@@ -323,7 +326,7 @@ def _(get_comps, ketcher, mo, set_comps):
 
         smi = smiles_text.value.strip()
         if smi and Chem.MolFromSmiles(smi) is not None:
-            set_comps(snapshot() + [{"smiles": smi, "copies": 1}])
+            set_comps(snapshot() + [{"smiles": smi, "copies": 4}])
 
     add_smiles_btn = mo.ui.button(label="➕ Add SMILES", kind="neutral", on_click=_add_smiles)
 
@@ -342,7 +345,7 @@ def _(get_comps, ketcher, mo, set_comps):
                             mo.hstack(
                                 [
                                     mo.md(
-                                        "<span style='color:#657188;font-size:.85rem'>Copies per formula unit</span>"
+                                        "<span style='color:#657188;font-size:.85rem'>Number of copies in the unit cell</span>"
                                     ),
                                     copies_inputs[i],
                                 ],
@@ -365,7 +368,7 @@ def _(get_comps, ketcher, mo, set_comps):
         _list = mo.vstack(_rows, gap=0.5)
     else:
         _list = mo.md(
-            "<div style='border:2px dashed #d7dee8;border-radius:10px;padding:28px;text-align:center;color:#94a3b8'>🧪 No components yet.<br/>Draw a structure and click <b>Add drawn molecule to cell contents</b>.</div>"
+            "<div style='border:2px dashed #d7dee8;border-radius:10px;padding:28px;text-align:center;color:#94a3b8'>🧪 No components yet.<br/>Draw a structure and click <b>Add drawn molecule to unit cell</b>.</div>"
         )
 
     mo.vstack(
@@ -378,7 +381,6 @@ def _(get_comps, ketcher, mo, set_comps):
                 justify="space-between",
             ),
             _list,
-            add_btn,
             mo.hstack(
                 [smiles_text, add_smiles_btn],
                 justify="start",
@@ -389,11 +391,11 @@ def _(get_comps, ketcher, mo, set_comps):
         ],
         gap=0.6,
     )
-    return (copies_inputs,)
+    return add_btn, copies_inputs
 
 
 @app.cell
-def _(filter_clashing, mo, model, n_steps, run, samples, z):
+def _(filter_clashing, mo, model, n_steps, run, samples):
     def _field(lbl, el):
         return mo.vstack(
             [
@@ -411,7 +413,6 @@ def _(filter_clashing, mo, model, n_steps, run, samples, z):
                     _field("Model", model),
                     _field("Candidates to sample", samples),
                     _field("Denoising steps", n_steps),
-                    _field("Z", z),
                 ],
                 widths="equal",
                 gap=1.0,
@@ -445,15 +446,13 @@ def _(
     samples,
     set_result,
     set_sel,
-    z,
 ):
     if run.value:
         _model_ids = {"Clari Medium": "clari-m", "Clari Large": "clari-l", "Clari Huge": "clari-h"}
         _comps = get_comps()
-        _z = int(z.value)
         _smiles = [c["smiles"] for c in _comps if c["smiles"].strip()]
         _copies = [
-            int(copies_inputs[i].value) * _z for i, c in enumerate(_comps) if c["smiles"].strip()
+            int(copies_inputs[i].value) for i, c in enumerate(_comps) if c["smiles"].strip()
         ]
         if _smiles:
             import traceback
