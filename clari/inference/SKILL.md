@@ -153,7 +153,7 @@ results/batch_run/
 | `--n-steps` | 50 | Flow matching steps |
 | `--torch-threads` | 1 | CPU thread count |
 | `--compile` | off | Enable `torch.compile` (off by default; gives a meaningful speedup on CUDA after cold-start) |
-| `--filter-clashing` | off | Resample clashing structures up to a small fixed number of rounds; fewer than `--samples` may be returned if enough clash-free samples cannot be produced |
+| `--filter-clashing` | off | Discard clashing structures and resample replacements |
 | `--overwrite` | off | Overwrite existing output directory |
 | `--no-ema` | off | Use raw weights instead of EMA weights |
 | `--no-bf16` | off | Disable bfloat16 (CUDA only) |
@@ -233,9 +233,9 @@ sampler.sample(
 - `copies: int | list[int] = 4` — molecules per unit cell; int for uniform, list for per-component
 - `samples: int = 1`
 - `output_dir` — if set, writes to disk and returns the output `Path`; predictions at `<output_dir>/predictions.parquet`
-- `filter_clashing: bool = False` — top-level helper only; resamples clashing structures up to a small fixed number of rounds
+- `filter_clashing: bool = False` — top-level helper only; discards clashing structures and resamples replacements
 
-`ClariSampler` constructor: `checkpoint` (`"clari-m"`, `"clari-l"`, or `"clari-h"`; default `"clari-h"`), `device` (default `"auto"`), `use_ema` (default `True`), `use_bf16` (default `True`), `n_steps` (default `50`), `compile` (default `False`), `num_gpus` (default `1`), `filter_clashing` (default `False`; when `True`, resamples clashing structures up to a small fixed number of rounds and may return fewer than requested if enough clash-free samples cannot be produced).
+`ClariSampler` constructor: `checkpoint` (`"clari-m"`, `"clari-l"`, or `"clari-h"`; default `"clari-h"`), `device` (default `"auto"`), `use_ema` (default `True`), `use_bf16` (default `True`), `n_steps` (default `50`), `compile` (default `False`), `num_gpus` (default `1`), `filter_clashing` (default `False`; when `True`, discards clashing structures and resamples replacements).
 
 ## Ranking and export from Python
 

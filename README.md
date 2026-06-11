@@ -159,7 +159,7 @@ sampler.sample(
 ```
 
 `sample()` kwargs: `id`, `copies` (int or list, default 4), `samples` (default 1), `output_dir`, `filter_clashing`.
-Pass `filter_clashing=True` to the `ClariSampler(...)` constructor or top-level `sample(...)` helper to resample clashing structures up to a small fixed number of rounds; if enough clash-free samples cannot be produced, fewer than `samples` may be returned. The CLI exposes the same behavior with `--filter-clashing`.
+Pass `filter_clashing=True` to the `ClariSampler(...)` constructor or top-level `sample(...)` helper to discard clashing structures and resample replacements.
 
 ### Rank and export from Python
 
