@@ -148,7 +148,7 @@ sampler.sample(
 ```
 
 `sample()` kwargs: `id`, `copies` (int or list, default 4), `samples` (default 1), `output_dir`.
-Pass `filter_clashing=True` to the `ClariSampler(...)` constructor to drop sampled structures with atom clashes (no resampling, so fewer than `samples` may be returned).
+Pass `filter_clashing=True` to the `ClariSampler(...)` constructor to drop sampled structures with atom clashes (no resampling, so fewer than `samples` may be returned — in practice clashes are rare at a high `n_steps` like 50, so few or none are dropped).
 
 ### Rank and export from Python
 

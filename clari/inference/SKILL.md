@@ -227,7 +227,7 @@ sampler.sample(
 - `samples: int = 1`
 - `output_dir` — if set, writes to disk and returns the output `Path`; predictions at `<output_dir>/predictions.parquet`
 
-`ClariSampler` constructor: `checkpoint` (`"clari-m"`, `"clari-l"`, or `"clari-h"`), `device` (default `"auto"`), `use_ema` (default `True`), `use_bf16` (default `True`), `n_steps` (default `50`), `compile` (default `False`), `num_gpus` (default `1`), `filter_clashing` (default `False`; when `True`, drops sampled structures with inter-molecular atom clashes instead of resampling, so fewer than `samples` may be returned).
+`ClariSampler` constructor: `checkpoint` (`"clari-m"`, `"clari-l"`, or `"clari-h"`), `device` (default `"auto"`), `use_ema` (default `True`), `use_bf16` (default `True`), `n_steps` (default `50`), `compile` (default `False`), `num_gpus` (default `1`), `filter_clashing` (default `False`; when `True`, drops sampled structures with inter-molecular atom clashes instead of resampling, so fewer than `samples` may be returned — clashes are rare at a high `n_steps` like 50, so few or none are dropped).
 
 ## Ranking and export from Python
 
