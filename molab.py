@@ -100,9 +100,9 @@ def _(mo):
     </style>
     <section class="hero">
         <h1>Fast Organic Crystal Structure Prediction with Unit Cell Flow Matching</h1>
-        <div class="authors">Alston Lo<sup>*</sup>, Luka Mucko<sup>*</sup>, Austin H. Cheng<sup>*</sup>, Andy Cai, Alastair J. A. Price, Wojciech Matusik, and Alán Aspuru-Guzik</div>
-        <div class="contrib"><sup>*</sup>Equal contribution</div>
-        <p>Draw molecular components in the Ketcher board, add them to the unit cell, set how many copies of each, then sample candidate crystal packings and inspect and download their CIFs.</p>
+        <div class="authors">Alston Lo<sup>&ast;</sup>, Luka Mucko<sup>&ast;</sup>, Austin H. Cheng<sup>&ast;</sup>, Andy Cai, Alastair J. A. Price, Wojciech Matusik, and Alán Aspuru-Guzik</div>
+        <div class="contrib"><sup>&ast;</sup>Equal contribution</div>
+        <p>Draw molecular components in the Ketcher board, add them to the cell contents, set how many copies of each, then sample candidate crystal packings and inspect and download their CIFs.</p>
         <div class="badges">
             <a href="https://arxiv.org/abs/2606.03199"><img src="https://img.shields.io/badge/arXiv-2606.03199-b31b1b.svg" /></a>
             <a href="https://github.com/aspuru-guzik-group/clari"><img src="https://img.shields.io/badge/GitHub-aspuru--guzik--group%2Fclari-24292f.svg?logo=github" /></a>
@@ -234,7 +234,7 @@ def _(ketcher, mo):
         [
             mo.md("<div class='step'>1. Draw a molecular component</div>"),
             mo.md(
-                "<p style='color:#657188;font-size:.92rem'>Sketch a structure below, then add it to the unit cell on the right. Draw and add several components for co-crystals.</p>"
+                "<p style='color:#657188;font-size:.92rem'>Sketch a structure below, then add it to the cell contents on the right. Draw and add several components for co-crystals.</p>"
             ),
             ketcher,
             mo.md(
@@ -248,7 +248,7 @@ def _(ketcher, mo):
 
 @app.cell
 def _(mo):
-    # Each entry is one molecular component of the unit cell.
+    # Each entry is one molecular component of the cell contents.
     get_comps, set_comps = mo.state([], allow_self_loops=True)
     return get_comps, set_comps
 
@@ -311,7 +311,7 @@ def _(get_comps, ketcher, mo, set_comps):
             set_comps(snapshot() + [{"smiles": smi, "copies": 1}])
 
     add_btn = mo.ui.button(
-        label="➕ Add drawn molecule to unit cell", kind="neutral", on_click=_add
+        label="➕ Add drawn molecule to cell contents", kind="neutral", on_click=_add
     )
 
     smiles_text = mo.ui.text(
@@ -365,7 +365,7 @@ def _(get_comps, ketcher, mo, set_comps):
         _list = mo.vstack(_rows, gap=0.5)
     else:
         _list = mo.md(
-            "<div style='border:2px dashed #d7dee8;border-radius:10px;padding:28px;text-align:center;color:#94a3b8'>🧪 No components yet.<br/>Draw a structure and click <b>Add drawn molecule to unit cell</b>.</div>"
+            "<div style='border:2px dashed #d7dee8;border-radius:10px;padding:28px;text-align:center;color:#94a3b8'>🧪 No components yet.<br/>Draw a structure and click <b>Add drawn molecule to cell contents</b>.</div>"
         )
 
     mo.vstack(
