@@ -433,30 +433,39 @@ def _(
             int(copies_inputs[i].value) * _z for i, c in enumerate(_comps) if c["smiles"].strip()
         ]
         if _smiles:
-            _sampler = ClariSampler(
-                _model_ids[model.value],
-                n_steps=int(n_steps.value),
-                torch_threads=1,
-                filter_clashing=bool(filter_clashing.value),
-            )
-            _trajectories = sample_trajectory(
-                _sampler,
-                _smiles,
-                copies=_copies,
-                samples=int(samples.value),
-                filter_clashing=bool(filter_clashing.value),
-            )
-            set_sel(0)
-            set_result(
-                {
-                    "crystals": [t.crystal for t in _trajectories],
-                    "trajectories": _trajectories,
-                    "smiles": " + ".join(
-                        f"{_s} ×{_c}" for _s, _c in zip(_smiles, _copies, strict=False)
-                    ),
-                    "model": model.value,
-                }
-            )
+            import traceback
+
+            try:
+                _sampler = ClariSampler(
+                    _model_ids[model.value],
+                    n_steps=int(n_steps.value),
+                    torch_threads=1,
+                    filter_clashing=bool(filter_clashing.value),
+                )
+                _trajectories = sample_trajectory(
+                    _sampler,
+                    _smiles,
+                    copies=_copies,
+                    samples=int(samples.value),
+                    filter_clashing=bool(filter_clashing.value),
+                )
+                set_sel(0)
+                set_result(
+                    {
+                        "crystals": [t.crystal for t in _trajectories],
+                        "trajectories": _trajectories,
+                        "smiles": " + ".join(
+                            f"{_s} ×{_c}" for _s, _c in zip(_smiles, _copies, strict=False)
+                        ),
+                        "model": model.value,
+                    }
+                )
+            except Exception as _exc:
+                # Surface inference errors (e.g. a disconnected molecule) in the UI
+                # instead of letting them crash the cell with no visible message.
+                set_result(
+                    {"error": f"{type(_exc).__name__}: {_exc}", "traceback": traceback.format_exc()}
+                )
     return
 
 
