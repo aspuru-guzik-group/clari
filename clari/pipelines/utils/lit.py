@@ -1,5 +1,8 @@
 import numpy as np
-import py3Dmol
+try:
+    import py3Dmol
+except ImportError:
+    py3Dmol = None
 import torch
 import torch.linalg as LA
 from torch.optim.lr_scheduler import LambdaLR
@@ -30,6 +33,8 @@ def sample_metrics(preds, trues):
 
 
 def sample_views(preds, trues, wrap="all"):
+    if py3Dmol is None:
+        raise ValueError("py3Dmol is not installed")
     grid = (len(preds), 4)
     width, height = 300, 200
 

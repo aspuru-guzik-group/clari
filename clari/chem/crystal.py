@@ -24,7 +24,6 @@ from torch.nn.utils.rnn import pad_sequence
 from clari import geometry as geom
 from clari.chem import BOND_TO_INDEX, INDEX_TO_BOND, silenced_rdlogger
 from clari.chem.common import PTABLE
-from clari.chem.draw import draw_crystal
 from clari.chem.featurize import featurize
 
 # https://github.com/project-gemmi/gemmi/issues/380
@@ -332,6 +331,7 @@ class Crystal:
 
     def show(self, lattice: bool = True, wrap: str = "none", **kwargs):
         assert not self.batched
+        from clari.chem.draw import draw_crystal
         C = self.wrapped(mode=wrap, bounds=(-0.5, 0.5))
         return draw_crystal(
             lattice=(C.lattice.numpy(force=True) if lattice else None),

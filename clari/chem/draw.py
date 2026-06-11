@@ -1,6 +1,9 @@
 import einops
 import numpy as np
-import py3Dmol
+try:
+    import py3Dmol
+except ImportError:
+    py3Dmol = None
 
 from clari.chem.common import xyzfile
 
@@ -44,6 +47,8 @@ def draw_box(view, lattice, viewer=None, **kwargs):
 
 
 def draw_overlay(mol1, mol2, view=None, colors=("blue", "red")):
+    if py3Dmol is None:
+        raise ValueError("install py3Dmol")
     if view is None:
         view = py3Dmol.view(width=400, height=400)
     for mol, color in zip((mol1, mol2), colors, strict=False):
@@ -103,6 +108,8 @@ def draw_crystal_trajectory(
     duration_play=2,
     duration_stop=10,
 ):
+    if py3Dmol is None:
+        raise ValueError("install py3Dmol")
     if view is None:
         view = py3Dmol.view(width=400, height=400)
 
