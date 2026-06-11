@@ -165,8 +165,9 @@ def _(mo):
     samples = mo.ui.number(start=1, stop=64, step=1, value=8, label="Candidates to sample")
     n_steps = mo.ui.number(start=1, stop=200, step=1, value=50, label="Denoising steps")
     z = mo.ui.number(start=1, stop=16, step=1, value=4, label="Z")
+    filter_clashing = mo.ui.checkbox(value=True, label="Filter clashing structures")
     run = mo.ui.run_button(label="Generate crystal packings", kind="success")
-    return model, n_steps, run, samples, z
+    return filter_clashing, model, n_steps, run, samples, z
 
 
 @app.cell
@@ -296,11 +297,12 @@ def _(get_comps, ketcher, mo, mol_svg, set_comps):
 
 
 @app.cell
-def _(model, mo, n_steps, run, samples, z):
+def _(filter_clashing, model, mo, n_steps, run, samples, z):
     mo.vstack(
         [
             mo.md("<div class='step'>3. Model &amp; generation options</div>"),
             mo.hstack([model, samples, n_steps, z], widths="equal"),
+            filter_clashing,
             run,
         ],
         gap=0.6,
@@ -319,6 +321,7 @@ def _(mo):
 def _(
     ClariSampler,
     copies_inputs,
+    filter_clashing,
     get_comps,
     model,
     n_steps,
@@ -339,10 +342,17 @@ def _(
         ]
         if _smiles:
             _sampler = ClariSampler(
-                _model_ids[model.value], n_steps=int(n_steps.value), torch_threads=1
+                _model_ids[model.value],
+                n_steps=int(n_steps.value),
+                torch_threads=1,
+                filter_clashing=bool(filter_clashing.value),
             )
             _trajectories = sample_trajectory(
-                _sampler, _smiles, copies=_copies, samples=int(samples.value)
+                _sampler,
+                _smiles,
+                copies=_copies,
+                samples=int(samples.value),
+                filter_clashing=bool(filter_clashing.value),
             )
             set_sel(0)
             set_result(
@@ -365,6 +375,12 @@ def _(get_result, mo):
         result is None,
         mo.md(
             "<p style='color:#657188'>Ready — add components and generate to see candidate packings here.</p>"
+        ),
+    )
+    mo.stop(
+        len(result["crystals"]) == 0,
+        mo.md(
+            "<p style='color:#b45309'>Every sampled candidate had atom clashes and was filtered out. Try more candidates, fewer copies, or uncheck <b>Filter clashing structures</b>.</p>"
         ),
     )
     crystals = result["crystals"]

@@ -35,6 +35,13 @@ def _seed_everything(seed: int) -> None:
         torch.cuda.manual_seed_all(seed)
 
 
+def _drop_clashes(crystals: list[Crystal]) -> list[Crystal]:
+    # Keep only structures free of inter-molecular clashes (no resampling to top up).
+    from clari.pipelines.utils.metrics import is_clash_free
+
+    return [c for c in crystals if is_clash_free(c)]
+
+
 def resolve_device(device: str | torch.device | None) -> torch.device:
     if device is None or str(device) == "auto":
         if torch.cuda.is_available():
@@ -173,6 +180,7 @@ class ClariSampler:
         torch_threads: int = 1,
         num_gpus: int = 1,
         seed: int | None = None,
+        filter_clashing: bool = False,
     ):
         if n_steps is not None and n_steps <= 0:
             raise ValueError(f"n_steps must be positive, got {n_steps}")
@@ -190,6 +198,7 @@ class ClariSampler:
         self.torch_threads = torch_threads
         self.num_gpus = num_gpus
         self.seed = seed
+        self.filter_clashing = filter_clashing
 
     @torch.inference_mode()
     def sample_batch(self, crystal: Crystal, count: int) -> list[Crystal]:
@@ -244,7 +253,8 @@ class ClariSampler:
             per_batch = min(per_batch, len(got))
             if progress is not None:
                 progress.update(min(len(got), need))
-        return produced[:target_samples]
+        result = produced[:target_samples]
+        return _drop_clashes(result) if self.filter_clashing else result
 
     @torch.inference_mode()
     def sample(
@@ -404,6 +414,7 @@ def gpu_worker(
     torch_threads: int,
     error_queue: mp.queues.Queue,
     seed: int | None,
+    filter_clashing: bool,
 ) -> None:
     import sys
     import traceback
@@ -419,6 +430,7 @@ def gpu_worker(
             compile=compile,
             torch_threads=torch_threads,
             num_gpus=1,
+            filter_clashing=filter_clashing,
         )
         if seed is not None:
             _seed_everything(seed + rank)
@@ -492,6 +504,7 @@ def sample_to_directory(
                     sampler.torch_threads,
                     error_queue,
                     seed,
+                    sampler.filter_clashing,
                 ),
             )
             proc.start()
@@ -585,6 +598,7 @@ def sample_trajectory(
     id: str | None = None,
     copies: int | list[int] = 4,
     samples: int = 1,
+    filter_clashing: bool = False,
 ) -> list[CrystalTrajectory]:
     """Demo-only: sample crystal structures and return their full diffusion trajectories."""
     request = make_request(smiles, id=id, copies=copies, samples=samples)
@@ -611,4 +625,8 @@ def sample_trajectory(
                 trajectory=traj,
             )
         )
+    if filter_clashing:
+        from clari.pipelines.utils.metrics import is_clash_free
+
+        results = [r for r in results if is_clash_free(r.crystal)]
     return results

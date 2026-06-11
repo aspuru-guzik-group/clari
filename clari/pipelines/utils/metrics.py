@@ -60,6 +60,11 @@ def check_clashes_eval(C: Crystal) -> float:
     return float((inter_dists < lb).any().item())
 
 
+def is_clash_free(C: Crystal) -> bool:
+    """Clash-free by BOTH the vdW and covalent criteria (used to filter sampled outputs)."""
+    return bool(check_clashes(C)["clash_free_vdw"]) and not check_clashes_eval(C)
+
+
 def volume_error(pred: Crystal, true: Crystal):
     v1 = LA.det(pred.lattice).abs().item()
     v2 = LA.det(true.lattice).abs().item()
