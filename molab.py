@@ -9,9 +9,6 @@
 #     "rdkit",
 #     "httpx[socks]",
 # ]
-#
-# [tool.uv.sources]
-# clari = { path = ".", editable = true }
 # ///
 
 import marimo
