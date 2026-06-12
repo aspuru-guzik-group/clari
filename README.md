@@ -63,6 +63,7 @@ automatically.
 uv run clari "CC(=O)Oc1ccccc1C(=O)O" 1 "O" 3 --samples 8   # aspirin trihydrate co-crystal
 uv run clari "CCO.O" 2                                     # dotted SMILES: (CCO,2),(O,2)
 uv run clari "CCO" --model clari-h --id ethanol            # pick model, label outputs
+uv run clari "CCO" --samples 10 --seed 0                   # reproducible sampling
 ```
 
 `--smiles`/`--copies` flags are a synonym of the positional form (use one or the

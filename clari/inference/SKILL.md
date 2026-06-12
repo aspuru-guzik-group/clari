@@ -151,6 +151,7 @@ results/batch_run/
 | `--num-gpus` | 1 | Number of GPUs (requires `--output-dir`) |
 | `--device` | auto | `cuda`, `mps`, `cpu`, or `cuda:N` |
 | `--n-steps` | 50 | Flow matching steps |
+| `--seed` | none | Random seed for reproducible sampling (multi-GPU workers use `seed + rank`). Config-level `seed` is ignored; pass `--seed` on the CLI. |
 | `--torch-threads` | 1 | CPU thread count |
 | `--compile` | off | Enable `torch.compile` (off by default; gives a meaningful speedup on CUDA after cold-start) |
 | `--filter-clashing` | off | Discard clashing structures and resample replacements |
@@ -162,7 +163,7 @@ results/batch_run/
 
 ## CLI — ranking
 
-Requires `fairchem-core`. Install with `pip install clari[uma]"` or `uv sync --extra uma`.
+Requires `fairchem-core`. Install with `pip install "clari[uma]"` or `uv sync --extra uma`.
 
 ```bash
 uv run rank results/ethanol
@@ -235,7 +236,7 @@ sampler.sample(
 - `output_dir` — if set, writes to disk and returns the output `Path`; predictions at `<output_dir>/predictions.parquet`
 - `filter_clashing: bool = False` — top-level helper only; discards clashing structures and resamples replacements
 
-`ClariSampler` constructor: `checkpoint` (`"clari-m"`, `"clari-l"`, or `"clari-h"`; default `"clari-h"`), `device` (default `"auto"`), `use_ema` (default `True`), `use_bf16` (default `True`), `n_steps` (default `50`), `compile` (default `False`), `num_gpus` (default `1`), `filter_clashing` (default `False`; when `True`, discards clashing structures and resamples replacements).
+`ClariSampler` constructor: `checkpoint` (`"clari-m"`, `"clari-l"`, or `"clari-h"`; default `"clari-h"`), `device` (default `"auto"`), `use_ema` (default `True`), `use_bf16` (default `True`), `n_steps` (default `50`), `compile` (default `False`), `num_gpus` (default `1`), `seed` (default `None`; set for reproducible sampling), `filter_clashing` (default `False`; when `True`, discards clashing structures and resamples replacements).
 
 ## Ranking and export from Python
 
