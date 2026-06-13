@@ -1,11 +1,11 @@
 ---
 name: clari
-description: Run CLARI crystal structure inference, batch sampling, ranking, and CIF export. Use for requests to sample crystal candidates from SMILES, run `sample`, `rank`, or `export-cifs`, prepare current-format inference configs, or explain the simplified inference package in `clari/inference/`.
+description: Run Clari crystal structure inference, batch sampling, ranking, and CIF export. Use for requests to sample crystal candidates from SMILES, run `sample`, `rank`, or `export-cifs`, prepare current-format inference configs, or explain the simplified inference package in `clari/inference/`.
 ---
 
-# CLARI inference
+# Clari inference
 
-CLARI predicts organic crystal structures from molecular SMILES. The workflow has three steps:
+Clari predicts organic crystal structures from molecular SMILES. The workflow has three steps:
 
 1. `clari` — samples candidate crystal structures, writes `predictions.parquet`, and (by default) exports `.cif` files
 2. `rank` — scores each candidate with FairChem UMA energy, writes `rankings.csv`

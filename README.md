@@ -20,13 +20,13 @@ This repository contains code to reproduce the paper: Fast Organic Crystal Struc
 
 ## Installation
 
-To install only the required packages for CLARI to run inference:
+To install only the required packages for Clari to run inference:
 
 ```bash
 pip install clari
 ```
 
-or by cloning the repository and running
+or install all dependencies by cloning the repository and running
 ```bash
 uv sync
 ```
@@ -50,7 +50,7 @@ the fastest model.
 
 ```bash
 # 10 candidate structures for ethanol, written to results/CCO_x4/
-uv run clari "CCO" --samples 10
+clari "CCO" --samples 10
 ```
 
 The grammar is `clari SMILES [copies] [SMILES [copies]]...` — a request is a flat
@@ -59,7 +59,10 @@ copies value broadcasts over the dot components of its token, and omitted copies
 default to 4 (the Z value, molecules per unit cell). Hydrogens are added
 automatically.
 
+> **Known limitation:** Clari ignores tetrahedral chirality tags (e.g. `[C@@H]`), and will generate samples with arbitrary tetrahedral chirality.
+
 ```bash
+# `uv run clari` is equivalent to `clari`
 uv run clari "CC(=O)Oc1ccccc1C(=O)O" 1 "O" 3 --samples 8   # aspirin trihydrate co-crystal
 uv run clari "CCO.O" 2                                     # dotted SMILES: (CCO,2),(O,2)
 uv run clari "CCO" --model clari-h --id ethanol            # pick model, label outputs

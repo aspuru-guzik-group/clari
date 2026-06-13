@@ -123,7 +123,7 @@ def _safe_path_part(value: str) -> str:
 
 def main() -> None:
     parser = ArgumentParser(
-        description="Export CIF files from CLARI predictions.parquet, optionally using rankings.csv."
+        description="Export CIF files from Clari predictions.parquet, optionally using rankings.csv."
     )
     parser.add_argument("input_path", type=Path)
     parser.add_argument("--output-dir", type=Path, default=None)

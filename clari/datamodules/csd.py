@@ -174,7 +174,7 @@ class CrystalDataModule(L.LightningDataModule):
         config_path = self.root / "config.json"
         if not config_path.is_file():
             raise FileNotFoundError(
-                f"Missing CLARI CSD data config: {config_path}. "
+                f"Missing Clari CSD data config: {config_path}. "
                 "Paper evaluation commands such as sample-test require a prepared "
                 "data/csd directory. Run from the repository root after generating the data, "
                 "or set CLARI_DATA_DIR to a directory containing csd/config.json and "
