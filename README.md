@@ -33,7 +33,7 @@ uv sync
 
 ## Inference
 
-See full inference guide: [inference reference](clari/inference/SKILL.md), which doubles as an agent skill.
+See full inference guide: [inference reference](clari/inference/SKILL.md), which doubles as an agent skill and can be printed by running `uv run clari-skill`.
 
 The workflow has three steps:
 
