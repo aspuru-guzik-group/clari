@@ -188,13 +188,7 @@ See also: [inference reference](clari/inference/SKILL.md).
 
 ## Development Installation
 
-To install all dependencies needed for development (in editable mode):
-
-```bash
-pip install -e ".[dev]"
-```
-
-Or using `uv` to sync the full development environment:
+To install all dependencies needed for development, use `uv`:
 
 ```bash
 uv sync
