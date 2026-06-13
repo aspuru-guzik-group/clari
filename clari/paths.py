@@ -1,6 +1,6 @@
+import os
 import pathlib
 import uuid
-import os
 
 PACKAGE_ROOT = pathlib.Path(__file__).parent
 

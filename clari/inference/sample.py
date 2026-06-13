@@ -177,6 +177,7 @@ class ClariSampler:
         num_gpus: int = 1,
         seed: int | None = None,
         filter_clashing: bool = False,
+        wrap: bool = False,
     ):
         if n_steps is not None and n_steps <= 0:
             raise ValueError(f"n_steps must be positive, got {n_steps}")
@@ -201,6 +202,7 @@ class ClariSampler:
         self.num_gpus = num_gpus
         self.seed = seed
         self.filter_clashing = filter_clashing
+        self.wrap = wrap
 
     @property
     def lit(self) -> LitDiT:
@@ -381,12 +383,19 @@ def build_chunks(
 
 
 def rows_for_samples(
-    request: SampleRequest, sample_idx_start: int, samples: list[Crystal]
+    request: SampleRequest,
+    sample_idx_start: int,
+    samples: list[Crystal],
+    wrap: bool = False,
 ) -> list[dict[str, Any]]:
     rows = []
     for offset, crystal in enumerate(samples):
         rows.append(
-            {"id": request.id, "sample_idx": sample_idx_start + offset, "cif": crystal.to_cif()}
+            {
+                "id": request.id,
+                "sample_idx": sample_idx_start + offset,
+                "cif": crystal.to_cif(wrap=wrap),
+            }
         )
     return rows
 
@@ -432,7 +441,7 @@ def run_chunks(
             write_shard(
                 shards_dir,
                 chunk["shard_index"],
-                rows_for_samples(request, chunk["sample_idx_start"], samples),
+                rows_for_samples(request, chunk["sample_idx_start"], samples, wrap=sampler.wrap),
             )
             all_samples.extend(samples)
     finally:
@@ -455,6 +464,7 @@ def gpu_worker(
     error_queue: mp.queues.Queue,
     seed: int | None,
     filter_clashing: bool,
+    wrap: bool,
 ) -> None:
     import sys
     import traceback
@@ -471,6 +481,7 @@ def gpu_worker(
             torch_threads=torch_threads,
             num_gpus=1,
             filter_clashing=filter_clashing,
+            wrap=wrap,
         )
         if seed is not None:
             _seed_everything(seed + rank)
@@ -557,6 +568,7 @@ def run_chunks_on_gpus(
                 error_queue,
                 seed,
                 sampler.filter_clashing,
+                sampler.wrap,
             ),
         )
         proc.start()
@@ -689,6 +701,7 @@ def sample(
     pbar: bool = True,
     seed: int | None = None,
     filter_clashing: bool = False,
+    wrap: bool = False,
 ) -> list[Crystal] | Path:
     sampler = ClariSampler(
         model,
@@ -701,6 +714,7 @@ def sample(
         num_gpus=num_gpus,
         filter_clashing=filter_clashing,
         seed=seed,
+        wrap=wrap,
     )
     return sampler.sample(
         requests,
@@ -713,12 +727,17 @@ def sample(
     )
 
 
-def save(crystals: list[Crystal], output_dir: str | Path, overwrite: bool = False) -> Path:
+def save(
+    crystals: list[Crystal],
+    output_dir: str | Path,
+    overwrite: bool = False,
+    wrap: bool = False,
+) -> Path:
     output_dir = Path(output_dir)
     prepare_output_dir(output_dir, overwrite)
     output_dir.mkdir(parents=True, exist_ok=True)
     rows = [
-        {"id": c.csd_id or "sample", "sample_idx": i, "cif": c.to_cif()}
+        {"id": c.csd_id or "sample", "sample_idx": i, "cif": c.to_cif(wrap=wrap)}
         for i, c in enumerate(crystals)
     ]
     parquet_path = output_dir / "predictions.parquet"

@@ -33,6 +33,8 @@ uv sync
 
 ## Inference
 
+See full inference guide: [inference reference](clari/inference/SKILL.md), which doubles as an agent skill.
+
 The workflow has three steps:
 
 1. `clari` — sample candidate crystal structures → `predictions.parquet` (+ `.cif` files by default)
@@ -183,8 +185,6 @@ export_cifs("results/ethanol", output_dir="my_cifs/ethanol")
 
 export_cifs(crystals, output_dir="my_cifs/", id="ethanol")
 ```
-
-See also: [inference reference](clari/inference/SKILL.md).
 
 ## Development Installation
 

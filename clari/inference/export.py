@@ -64,6 +64,8 @@ def export_cifs(
         df = df.filter(pl.col(SAMPLE_IDX_COLUMN).is_in(sample_idx_list))
     df = df.collect()
 
+    single_id = df.select(pl.col(ID_COLUMN).n_unique()).item() <= 1
+
     rankings_path = _resolve_rankings_path(predictions_path, rankings_path)
     if rankings_path is not None:
         rankings = pl.read_csv(rankings_path).select(SAMPLE_IDX_COLUMN, ID_COLUMN, RANK_COLUMN)
@@ -79,7 +81,7 @@ def export_cifs(
         df = df.sort([ID_COLUMN, SAMPLE_IDX_COLUMN])
 
     for row in df.iter_rows(named=True):
-        compound_dir = output_dir / _safe_path_part(row[ID_COLUMN])
+        compound_dir = output_dir if single_id else output_dir / _safe_path_part(row[ID_COLUMN])
         compound_dir.mkdir(parents=True, exist_ok=True)
         sample_idx_value = int(row[SAMPLE_IDX_COLUMN])
         rank_value = row.get(RANK_COLUMN)

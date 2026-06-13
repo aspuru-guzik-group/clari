@@ -25,6 +25,7 @@ def build_parser() -> ArgumentParser:
     parser.add_argument("--seed", type=int, default=None)
     parser.add_argument("--compile", action="store_true")
     parser.add_argument("--filter-clashing", action="store_true")
+    parser.add_argument("--wrap", action="store_true")
     parser.add_argument("--overwrite", action="store_true")
     parser.add_argument("--no-ema", action="store_true")
     parser.add_argument("--no-bf16", action="store_true")
@@ -85,6 +86,7 @@ def main(argv: list[str] | None = None) -> int:
         num_gpus=args["num_gpus"],
         filter_clashing=bool(args["filter_clashing"]),
         seed=args["seed"],
+        wrap=bool(args["wrap"]),
     )
     print(f"Using model: {sampler.model}", file=sys.stderr)
     print(f"Using device: {sampler.device}", file=sys.stderr)

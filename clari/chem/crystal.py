@@ -362,7 +362,7 @@ class Crystal:
             pbc=True,
         )
 
-    def to_cif(self, as_string=True) -> cif.Document | str:
+    def to_cif(self, as_string=True, wrap: bool = False) -> cif.Document | str:
         assert not self.batched
         lattice = self.lattice.detach().cpu().numpy()
         a, b, c = map(np.linalg.norm, lattice)
@@ -374,7 +374,8 @@ class Crystal:
         st.cell = gemmi.UnitCell(a, b, c, alpha, beta, gamma)
         st.spacegroup_hm = "P 1"
 
-        frac_coords = self.frac_coords.detach().cpu().numpy()
+        C = self.wrapped(mode="com", bounds=(0.0, 1.0)) if wrap else self
+        frac_coords = C.frac_coords.detach().cpu().numpy()
         atom_nums = self.atom_nums.detach().cpu().numpy()
         label_counts = defaultdict(int)
         for z, (x, y, z_c) in zip(atom_nums, frac_coords, strict=False):

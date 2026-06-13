@@ -24,7 +24,7 @@ def main() -> None:
             {
                 "csd_id": cid,
                 "family": cid[:6],
-                "cif": crystal.to_cif(),
+                "cif": crystal.to_cif(wrap=False),
                 "subsets": fam_to_subsets.get(cid[:6], []),
             }
         )

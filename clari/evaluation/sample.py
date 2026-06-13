@@ -142,7 +142,7 @@ def writer_loop(queue, samples_dir, trajectory_dir, errors):
             data = {
                 "sample_idx": idxs,
                 "id": [str(c.csd_id) for c in crystals],
-                "cif": [c.to_cif() for c in crystals],
+                "cif": [c.to_cif(wrap=False) for c in crystals],
             }
             pl.DataFrame(data).write_parquet(path)
             if any(t is not None for t in trajs):
