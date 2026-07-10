@@ -374,7 +374,11 @@ class Crystal:
         st.cell = gemmi.UnitCell(a, b, c, alpha, beta, gamma)
         st.spacegroup_hm = "P 1"
 
-        frac_coords = self.frac_coords.detach().cpu().numpy()
+        f = self.frac_coords
+        fcoms = pyg.utils.scatter(f, self.body_ids, reduce="mean")
+        shift = softwrap(fcoms, bounds=(0.0, 1.0), margin=1e-5) - fcoms
+        frac_coords = (f + shift[self.body_ids]).detach().cpu().numpy()
+
         atom_nums = self.atom_nums.detach().cpu().numpy()
         label_counts = defaultdict(int)
         for z, (x, y, z_c) in zip(atom_nums, frac_coords, strict=False):
