@@ -266,6 +266,11 @@ The exact commands used for to train our ablated and final models can be found i
 from clari.pipelines.utils.metrics import assess_crystals_eval
 ```
 
+## Limitations
+- Clari ignores chirality tags, so tetrahedral stereocenters will have random chirality.
+- Clari ignores bond order edge features and will infer it from hydrogens.
+- Clari can produce inaccurate crystals. For best results, generate many samples and use clash filtering and energy ranking to select stable crystals.
+
 ## License
 The source code of Clari is released under the MIT License (see [LICENSE](LICENSE)).
 
