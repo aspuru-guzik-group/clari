@@ -588,24 +588,27 @@ def _(get_result, mo):
 @app.cell
 def _(crystals, get_sel, mo, set_sel):
     _sel = min(get_sel(), len(crystals) - 1)
-    _cards = [
-        mo.ui.button(
-            label=f"Candidate #{i + 1}",
-            kind="success" if i == _sel else "neutral",
-            on_click=lambda _, i=i: set_sel(i),
-        )
-        for i in range(len(crystals))
-    ]
-    return mo.vstack(
+    _cards = mo.ui.array(
+        [
+            mo.ui.button(
+                label=f"Candidate #{i + 1}",
+                kind="success" if i == _sel else "neutral",
+                on_click=lambda _, i=i: set_sel(i),
+            )
+            for i in range(len(crystals))
+        ]
+    )
+    mo.vstack(
         [
             mo.md("<div class='step'>4. Candidate packings</div>"),
             mo.md(
                 "<p style='color:#657188;font-size:.9rem'>Click a candidate to load it into the 3D viewer below.</p>"
             ),
-            mo.hstack(_cards, justify="start", gap=0.4, wrap=True),
+            mo.hstack(list(_cards), justify="start", gap=0.4, wrap=True),
         ],
         gap=0.5,
     )
+    return
 
 
 @app.cell
