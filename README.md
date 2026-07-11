@@ -44,9 +44,13 @@ The workflow has three steps:
 `clari` writes `.cif` files automatically after sampling; pass `--no-export-cifs`
 to write only `predictions.parquet`.
 
-Models (`clari-m`, `clari-l`, `clari-h`) download automatically from HuggingFace on
-first use. The default is `clari-h` (highest quality); pass `--model clari-m` for
-the fastest model.
+Models download automatically from HuggingFace on first use:
+
+| Model | Params | Description |
+| :--- | :--- | :--- |
+| `clari-h` | 354M (huge) | Best quality (default) |
+| `clari-l` | 173M (large) | Large |
+| `clari-m` | 88M (medium) | Fastest |
 
 ### Quickstart
 
