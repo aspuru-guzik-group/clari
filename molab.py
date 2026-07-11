@@ -586,17 +586,13 @@ def _(get_result, mo):
 
 
 @app.cell
-def _(crystals, get_sel, mo, set_sel):
+def _(crystals, get_sel, mo):
     _sel = min(get_sel(), len(crystals) - 1)
-    _cards = mo.ui.array(
-        [
-            mo.ui.button(
-                label=f"Candidate #{i + 1}",
-                kind="success" if i == _sel else "neutral",
-                on_click=lambda _, i=i: set_sel(i),
-            )
-            for i in range(len(crystals))
-        ]
+    candidate_picker = mo.ui.dropdown(
+        options={f"Candidate #{i + 1}": i for i in range(len(crystals))},
+        value=f"Candidate #{_sel + 1}",
+        label="Candidate",
+        searchable=len(crystals) > 12,
     )
     mo.vstack(
         [
@@ -604,26 +600,27 @@ def _(crystals, get_sel, mo, set_sel):
             mo.md(
                 "<p style='color:#657188;font-size:.9rem'>Click a candidate to load it into the 3D viewer below.</p>"
             ),
-            mo.hstack(list(_cards), justify="start", gap=0.4, wrap=True),
+            mo.Html("<div style='height:12px'></div>"),
+            candidate_picker,
         ],
         gap=0.5,
     )
-    return
+    return (candidate_picker,)
 
 
 @app.cell
 def _(
     Mol3DWidget,
     base64,
+    candidate_picker,
     crystals,
-    get_sel,
     io,
     mo,
     sampled_smiles,
     trajectories,
     zipfile,
 ):
-    _idx = min(get_sel(), len(crystals) - 1)
+    _idx = candidate_picker.value
     _h = 540
     _crystal = crystals[_idx].wrapped(mode="com", bounds=(-0.5, 0.5))
 
